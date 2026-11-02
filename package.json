@@ -58,6 +58,11 @@
 		]
 	},
 	"dependencies": {
+		"@tiptap/core": "^3.32.2",
+		"@tiptap/extension-highlight": "^3.32.2",
+		"@tiptap/extensions": "^3.32.2",
+		"@tiptap/pm": "^3.32.2",
+		"@tiptap/starter-kit": "^3.32.2",
 		"nodemailer": "^7.0.10"
 	}
 }

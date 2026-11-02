@@ -47,7 +47,7 @@ Senza un dominio proprio le email partono da un account Gmail:
 ## Stato
 
 - [x] Fase 1 — base: progetto, tema, guscio responsive, schema e prima migrazione, account (registrazione, accesso, conferma email, password dimenticata, profilo).
-- [ ] Fase 2 — note ed editor.
+- [x] Fase 2 — note ed editor: elenco per periodo, ricerca, tag, editor rich text con salvataggio automatico, giorno, fissate, schermo intero.
 - [ ] Fase 3 — lista del giorno e todo.
 - [ ] Fase 4 — home "Oggi" e note nella home.
 - [ ] Fase 5 — notifiche.

@@ -226,6 +226,146 @@ html {
 	color: var(--color-void);
 }
 
+/* Voce di elenco delle note: contorno, trattino giallo, angolo tagliato in basso a destra. */
+@utility note-row {
+	position: relative;
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	padding: 12px 14px 12px 10px;
+	border: 1px solid var(--color-field);
+	color: var(--color-ink);
+	&::before {
+		content: '';
+		flex: none;
+		width: 12px;
+		height: 2px;
+		margin-top: 10px;
+		background: var(--color-volt);
+	}
+	&::after {
+		content: '';
+		position: absolute;
+		right: -1px;
+		bottom: -1px;
+		border-left: 12px solid transparent;
+		border-bottom: 12px solid var(--color-field);
+	}
+	&:hover,
+	&[aria-current='page'] {
+		border-color: var(--color-volt);
+		color: var(--color-volt);
+	}
+	&:hover::after,
+	&[aria-current='page']::after {
+		border-bottom-color: var(--color-volt);
+	}
+}
+
+/* Chip con contorno e angolo tagliato (giorno, tag, promemoria). */
+@utility chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 34px;
+	padding: 0 12px;
+	border: 1px solid currentColor;
+	background: var(--color-void);
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+}
+
+/* Testo delle note (editor Tiptap e anteprime). */
+.note-body {
+	font-size: 17px;
+	line-height: 1.55;
+	outline: none;
+	overflow-wrap: anywhere;
+	& > * + * {
+		margin-top: 0.7em;
+	}
+	& h1 {
+		font-size: 26px;
+		line-height: 1.1;
+		font-weight: 700;
+		text-transform: uppercase;
+		color: #fff;
+	}
+	& h2 {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		font-size: 20px;
+		font-weight: 700;
+		text-transform: uppercase;
+		color: #fff;
+		&::before {
+			content: '';
+			width: 12px;
+			height: 2px;
+			flex: none;
+			background: var(--color-volt);
+		}
+	}
+	& strong {
+		color: var(--color-volt);
+		font-weight: 700;
+	}
+	& mark {
+		background: var(--color-neon);
+		color: var(--color-void);
+		padding: 0 3px;
+	}
+	& a {
+		color: var(--color-neon);
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	& ul,
+	& ol {
+		padding-left: 22px;
+	}
+	& ul {
+		list-style: square;
+	}
+	& ol {
+		list-style: decimal;
+	}
+	& li::marker {
+		color: var(--color-volt);
+	}
+	& li > p + * {
+		margin-top: 0.3em;
+	}
+	& blockquote {
+		padding: 10px 12px;
+		border-left: 4px solid var(--color-alert);
+		background: var(--color-alert-soft);
+		color: #ffc2cc;
+		font-size: 15px;
+	}
+	& code {
+		padding: 1px 4px;
+		background: var(--color-raised);
+		font-size: 0.9em;
+	}
+	& hr {
+		border: 0;
+		height: 6px;
+		background: var(--color-line);
+	}
+	& p.is-editor-empty:first-child::before {
+		content: attr(data-placeholder);
+		float: left;
+		height: 0;
+		color: var(--color-dim);
+		pointer-events: none;
+	}
+}
+
 /* ---------------------------------------------------------------------------
    Guscio dell'app: barra in basso (compatto) → rail a sinistra (da 600 px).
    Sui pieghevoli aperti a libro la rail resta nella metà sinistra.
@@ -295,5 +435,24 @@ html {
 	.app-main {
 		padding-left: 76px;
 		padding-bottom: 0;
+	}
+}
+
+/* Editor sul telefono: niente barra in basso, la toolbar sta sopra la tastiera. */
+@media (max-width: 599.98px) {
+	[data-focus] .app-nav {
+		display: none;
+	}
+	[data-focus] .app-main {
+		padding-bottom: 0;
+	}
+}
+/* Nota a schermo intero (?full=1) da 600 px: niente rail, la nota prende tutta la larghezza. */
+@media (min-width: 600px) {
+	[data-full] .app-nav {
+		display: none;
+	}
+	[data-full] .app-main {
+		padding-left: 0;
 	}
 }
