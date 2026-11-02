@@ -145,3 +145,12 @@ export const restoreNote = (userId: string, id: string) =>
 		.update(s.note)
 		.set({ deletedAt: null })
 		.where(and(eq(s.note.id, id), eq(s.note.userId, userId), isNotNull(s.note.deletedAt)));
+
+/** Note assegnate a un giorno, con il contenuto (per trovarne le checklist). */
+export async function notesForDay(userId: string, day: string) {
+	return db
+		.select({ ...summary, content: s.note.content })
+		.from(s.note)
+		.where(and(visible(userId), eq(s.note.day, day)))
+		.orderBy(desc(s.note.pinned), desc(s.note.updatedAt));
+}

@@ -50,7 +50,7 @@ Senza un dominio proprio le email partono da un account Gmail:
 - [x] Fase 1 — base: progetto, tema, guscio responsive, schema e prima migrazione, account (registrazione, accesso, conferma email, password dimenticata, profilo).
 - [x] Fase 2 — note ed editor: elenco per periodo, ricerca, tag, editor rich text con salvataggio automatico, giorno, fissate, schermo intero.
 - [x] Fase 3 — lista del giorno e todo: aggiunta rapida con riconoscimento di giorno, ora e ripetizione, modifica nella riga, scorrimento (Domani/Elimina), annulla, riordino, tastiera, ricorrenti.
-- [ ] Fase 4 — home "Oggi" e note nella home.
+- [x] Fase 4 — home "Oggi": checklist dentro le note, card delle note del giorno, note raggruppate per periodo, todo in sospeso, segni sui giorni, calendario mensile.
 - [ ] Fase 5 — notifiche.
 - [ ] Fase 6 — Google Calendar (e accesso con Google).
 - [ ] Fase 7 — AI con Gemini.

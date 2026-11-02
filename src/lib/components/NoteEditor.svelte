@@ -6,10 +6,13 @@
 	import StarterKit from '@tiptap/starter-kit';
 	import Highlight from '@tiptap/extension-highlight';
 	import { Placeholder } from '@tiptap/extensions';
+	import { ChecklistEmbed } from '#lib/editor/checklist-embed.ts';
+	import { todoApi } from '#lib/todo-api.ts';
 	import {
 		CalendarDays,
 		ChevronLeft,
 		Highlighter,
+		ListChecks,
 		Link2,
 		List,
 		ListOrdered,
@@ -44,7 +47,7 @@
 	}>;
 	type Conflict = Omit<Note, 'id'> & { text: string };
 
-	let { note }: { note: Note } = $props();
+	let { note, today }: { note: Note; today: string } = $props();
 	// l'editor parte dalla versione caricata; da lì in poi lo stato è locale
 	const initial = untrack(() => note);
 	const iso = (d: Date | string) => new Date(d).toISOString();
@@ -178,7 +181,8 @@
 					}
 				}),
 				Highlight,
-				Placeholder.configure({ placeholder: 'Scrivi qui…' })
+				Placeholder.configure({ placeholder: 'Scrivi qui…' }),
+				ChecklistEmbed.configure({ today })
 			],
 			content: (initial.content as JSONContent) ?? '',
 			editorProps: {
@@ -284,6 +288,25 @@
 		if (!url) chain.unsetLink().run();
 		else chain.setLink({ href: /^[a-z][a-z\d+.-]*:/i.test(url) ? url : `https://${url}` }).run();
 		linkOpen = false;
+	}
+
+	// --- Checklist ---
+
+	let creatingChecklist = false;
+	/** Crea una checklist della nota e la inserisce dove c'è il cursore. */
+	async function insertChecklist() {
+		if (!editor || creatingChecklist) return;
+		creatingChecklist = true;
+		try {
+			const { checklistId } = await todoApi<{ checklistId: string }>('createChecklist', {
+				noteId: initial.id
+			});
+			editor.chain().focus().insertChecklist(checklistId).run();
+		} catch {
+			status = 'error';
+		} finally {
+			creatingChecklist = false;
+		}
 	}
 
 	// --- Giorno, tag, fissata ---
@@ -528,6 +551,14 @@
 				onclick={openLink}
 			>
 				<Link2 size={20} strokeWidth={2.5} aria-hidden="true" />
+			</button>
+			<button
+				class="flex size-11 shrink-0 items-center justify-center"
+				aria-label="Inserisci una checklist"
+				onmousedown={(e) => e.preventDefault()}
+				onclick={insertChecklist}
+			>
+				<ListChecks size={20} strokeWidth={2.5} aria-hidden="true" />
 			</button>
 		</div>
 	</div>

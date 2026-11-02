@@ -362,3 +362,89 @@ export async function stopRule(userId: string, ruleId: string, today: string) {
 		.set({ endsOn: today })
 		.where(and(eq(s.todoRule.id, ruleId), eq(s.todoRule.userId, userId)));
 }
+
+// --- Checklist delle note, todo in sospeso, giorni con contenuti ---
+
+/** Todo di più liste (dell'utente), raggruppati per lista. */
+export async function checklistItems(user: User, checklistIds: string[]) {
+	const map = new Map<string, TodoItem[]>(checklistIds.map((id) => [id, []]));
+	if (!checklistIds.length) return map;
+	const owned = await db
+		.select({ id: s.checklist.id })
+		.from(s.checklist)
+		.where(and(inArray(s.checklist.id, checklistIds), eq(s.checklist.userId, user.id)));
+	if (!owned.length) return map;
+	for (const { checklistId, item } of await itemsOf(
+		user,
+		owned.map((c) => c.id)
+	))
+		map.get(checklistId)?.push(item);
+	return map;
+}
+
+/** Nuova checklist dentro una nota (null se la nota non è dell'utente). */
+export async function createNoteChecklist(user: User, noteId: string) {
+	const [note] = await db
+		.select({ id: s.note.id })
+		.from(s.note)
+		.where(and(eq(s.note.id, noteId), eq(s.note.userId, user.id), isNull(s.note.deletedAt)));
+	if (!note) return null;
+	const id = randomUUID();
+	await db.insert(s.checklist).values({ id, userId: user.id, kind: 'note', noteId });
+	return id;
+}
+
+/** Todo non fatti dei giorni passati (ultimi 30 giorni), dal più vecchio. */
+export async function overdueTodos(user: User, today: string, since: string) {
+	const rows = await db
+		.select({ id: s.todo.id, text: s.todo.text, day: s.checklist.day })
+		.from(s.todo)
+		.innerJoin(s.checklist, eq(s.todo.checklistId, s.checklist.id))
+		.where(
+			and(
+				eq(s.checklist.userId, user.id),
+				eq(s.checklist.kind, 'day'),
+				sql`${s.checklist.day} < ${today}`,
+				gte(s.checklist.day, since),
+				isNull(s.todo.doneAt),
+				isNull(s.todo.deletedAt)
+			)
+		)
+		.orderBy(asc(s.checklist.day), asc(s.todo.position));
+	return rows.map((r) => ({ id: r.id, text: r.text, day: r.day! }));
+}
+
+/** Giorni (tra `from` e `to`) con todo da fare o note assegnate, per i segni sul calendario. */
+export async function dayMarkers(userId: string, from: string, to: string) {
+	const todos = await db
+		.select({ day: s.checklist.day, n: sql<number>`count(*)::int` })
+		.from(s.todo)
+		.innerJoin(s.checklist, eq(s.todo.checklistId, s.checklist.id))
+		.where(
+			and(
+				eq(s.checklist.userId, userId),
+				eq(s.checklist.kind, 'day'),
+				gte(s.checklist.day, from),
+				lte(s.checklist.day, to),
+				isNull(s.todo.doneAt),
+				isNull(s.todo.deletedAt)
+			)
+		)
+		.groupBy(s.checklist.day);
+	const notes = await db
+		.select({ day: s.note.day, n: sql<number>`count(*)::int` })
+		.from(s.note)
+		.where(
+			and(
+				eq(s.note.userId, userId),
+				gte(s.note.day, from),
+				lte(s.note.day, to),
+				isNull(s.note.deletedAt)
+			)
+		)
+		.groupBy(s.note.day);
+	const markers: Record<string, { todos: number; notes: number }> = {};
+	for (const r of todos) markers[r.day!] = { todos: r.n, notes: 0 };
+	for (const r of notes) markers[r.day!] = { todos: markers[r.day!]?.todos ?? 0, notes: r.n };
+	return markers;
+}

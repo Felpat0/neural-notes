@@ -3,6 +3,8 @@ import { todayIn } from '#lib/format.ts';
 import { isValidRepeat } from '#lib/repeat.ts';
 import {
 	MAX_TODO_LENGTH,
+	checklistItems,
+	createNoteChecklist,
 	createTodos,
 	deleteTodo,
 	moveTodo,
@@ -77,6 +79,31 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		case 'toggle': {
 			if (!isId(body.id) || typeof body.done !== 'boolean') error(400);
 			return json({ item: (await toggleTodo(user, body.id, body.done)) ?? notFound() });
+		}
+		case 'list': {
+			if (!isId(body.checklistId)) error(400);
+			const items = (await checklistItems(user, [body.checklistId])).get(body.checklistId);
+			return json({ items: items ?? [] });
+		}
+		case 'createChecklist': {
+			if (!isId(body.noteId)) error(400);
+			const checklistId = await createNoteChecklist(user, body.noteId);
+			return checklistId ? json({ checklistId }) : error(404, 'Nota non trovata');
+		}
+		case 'moveMany': {
+			if (
+				!Array.isArray(body.ids) ||
+				body.ids.length > 200 ||
+				!body.ids.every(isId) ||
+				!isDay(body.day)
+			)
+				error(400);
+			const moved = [];
+			for (const id of body.ids) {
+				const result = await moveTodo(user, id, body.day);
+				if (result?.item) moved.push(result.item);
+			}
+			return json({ items: moved });
 		}
 		case 'move': {
 			if (!isId(body.id) || !isDay(body.day)) error(400);

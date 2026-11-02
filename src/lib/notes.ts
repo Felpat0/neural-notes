@@ -82,6 +82,9 @@ export function noteStamp(
 	);
 }
 
+/** Mesi di note caricati all'inizio; "Mesi precedenti" ne aggiunge altri tre. */
+export const DEFAULT_MONTHS = 3;
+
 export const MAX_TAGS = 12;
 export const MAX_TAG_LENGTH = 30;
 
@@ -95,4 +98,29 @@ export function cleanTags(tags: unknown): string[] | null {
 		if (clean && clean.length <= MAX_TAG_LENGTH) out.add(clean);
 	}
 	return [...out].slice(0, MAX_TAGS);
+}
+
+/**
+ * Id delle checklist inserite nel testo (blocchi "checklistEmbed"), in ordine. Una checklist
+ * tolta dal testo resta nel database (Ctrl+Z la rimette) ma non si mostra più altrove.
+ */
+export function checklistIdsIn(content: unknown): string[] {
+	const ids: string[] = [];
+	const walk = (node: unknown) => {
+		if (!node || typeof node !== 'object') return;
+		const {
+			type,
+			attrs,
+			content: children
+		} = node as {
+			type?: string;
+			attrs?: { checklistId?: unknown };
+			content?: unknown[];
+		};
+		if (type === 'checklistEmbed' && typeof attrs?.checklistId === 'string')
+			ids.push(attrs.checklistId);
+		if (Array.isArray(children)) children.forEach(walk);
+	};
+	walk(content);
+	return [...new Set(ids)];
 }

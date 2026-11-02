@@ -124,3 +124,14 @@ export const weekdayName = (day: string) => WEEKDAYS[new Date(`${day}T12:00:00Z`
 export const weekdayShort = (day: string) => weekdayName(day).slice(0, 3).toUpperCase();
 export const dayNumber = (day: string) => day.slice(8, 10);
 export const monthShort = (day: string) => MONTHS_SHORT[Number(day.slice(5, 7)) - 1];
+
+/** Primo giorno (00:00 UTC) del mese di `months - 1` mesi prima di `today`: 1 = questo mese. */
+export function monthsAgo(today: string, months: number) {
+	const d = new Date(`${today.slice(0, 7)}-01T00:00:00Z`);
+	d.setUTCMonth(d.getUTCMonth() - (months - 1));
+	return d;
+}
+
+/** Numero di mesi da `?mesi=`, tra 1 e 240. */
+export const monthsParam = (value: string | null, fallback: number) =>
+	Math.min(240, Math.max(1, Number(value) || fallback));
