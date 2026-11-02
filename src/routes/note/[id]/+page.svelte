@@ -9,5 +9,5 @@
 
 <!-- un editor nuovo per ogni nota: passando da una all'altra non resta lo stato della precedente -->
 {#key data.note.id}
-	<NoteEditor note={data.note} today={data.today} />
+	<NoteEditor note={data.note} today={data.today} reminder={data.reminder} />
 {/key}

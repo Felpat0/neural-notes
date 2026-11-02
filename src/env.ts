@@ -27,5 +27,20 @@ export const variables = defineEnvVars({
 	MAIL_FROM: {
 		description: 'Mittente, es. "NEURAL//NOTES <utente@gmail.com>" (stesso account di SMTP_URL).',
 		schema: optional
+	},
+	// Notifiche push: senza queste variabili le notifiche restano disattivate.
+	PUBLIC_VAPID_KEY: {
+		public: true,
+		description: 'Chiave pubblica VAPID (npx web-push generate-vapid-keys).',
+		schema: optional
+	},
+	VAPID_PRIVATE_KEY: { description: 'Chiave privata VAPID.', schema: optional },
+	VAPID_SUBJECT: {
+		description: "Contatto VAPID: un URL https dell'app o un indirizzo mailto:.",
+		schema: optional
+	},
+	CRON_SECRET: {
+		description: 'Segreto richiesto da /api/cron/notify (chiamato ogni minuto da cron-job.org).',
+		schema: optional
 	}
 });

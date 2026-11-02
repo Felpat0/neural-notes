@@ -2,8 +2,9 @@ import { error, redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit/hooks';
 import { SESSION_COOKIE, readSession } from '#lib/server/auth.ts';
 
-// Pagine dell'account che funzionano senza essere entrati.
+// Pagine dell'account che funzionano senza essere entrati; /api/cron/ ha un segreto suo.
 const PUBLIC_PATHS = [
+	'/api/cron/',
 	'/login',
 	'/registrati',
 	'/password-dimenticata',

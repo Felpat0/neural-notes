@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { ListChecks, Pin } from '@lucide/svelte';
 	import TodoList from '#lib/components/TodoList.svelte';
+	import { dayNumber } from '#lib/format.ts';
 	import type { TodoItem } from '#lib/todo-api.ts';
 
 	// Nota assegnata al giorno, nella home: titolo, inizio del testo e le sue checklist,
@@ -15,6 +16,8 @@
 			preview: string;
 			tags: string[];
 			pinned: boolean;
+			/** prossimo promemoria, "AAAA-MM-GGTHH:MM" */
+			reminder: string | null;
 			checklists: { id: string; items: TodoItem[] }[];
 		};
 		today: string;
@@ -28,7 +31,14 @@
 			class="flex items-center gap-1.5 text-xl leading-tight font-bold uppercase"
 		>
 			{#if note.pinned}<Pin size={16} class="shrink-0 text-volt" aria-label="Fissata" />{/if}
-			{note.title || 'Senza titolo'}
+			<span class="flex-1">{note.title || 'Senza titolo'}</span>
+			{#if note.reminder}
+				<span class="chip min-h-7 shrink-0 px-2 text-alert" title="Promemoria">
+					◷ {note.reminder.slice(0, 10) === today
+						? note.reminder.slice(11, 16)
+						: `${dayNumber(note.reminder)}/${note.reminder.slice(5, 7)} ${note.reminder.slice(11, 16)}`}
+				</span>
+			{/if}
 		</span>
 		{#if note.preview}
 			<span class="line-clamp-3 text-sm leading-relaxed text-dim">{note.preview}</span>

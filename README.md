@@ -32,6 +32,15 @@ Senza un dominio proprio le email partono da un account Gmail:
 2. Account Google → Sicurezza → **Password per le app**: crearne una.
 3. `SMTP_URL="smtps://utente%40gmail.com:<password-per-le-app>@smtp.gmail.com:465"` e `MAIL_FROM="NEURAL//NOTES <utente@gmail.com>"` (stesso indirizzo).
 
+## Notifiche
+
+1. Chiavi VAPID: `npx web-push generate-vapid-keys` → `PUBLIC_VAPID_KEY` e `VAPID_PRIVATE_KEY`; `VAPID_SUBJECT` = `mailto:` + un tuo indirizzo.
+2. `CRON_SECRET`: una stringa casuale lunga.
+3. Su [cron-job.org](https://cron-job.org) un job **ogni minuto**, GET `https://<app>/api/cron/notify`, con l'header `Authorization: Bearer <CRON_SECRET>` (oppure `?key=<CRON_SECRET>` nell'indirizzo).
+4. Nell'app: Profilo → Notifiche → Attiva, su ogni dispositivo. Su iPhone serve l'app aggiunta alla schermata Home (iOS 16.4+).
+
+Il cron prende i promemoria arrivati all'ora e li invia a tutti i dispositivi dell'utente; salta i todo già fatti o eliminati e quelli in ritardo di più di 6 ore (es. dopo un'interruzione). Crea anche le occorrenze di oggi dei todo ricorrenti con un'ora, così suonano anche senza aprire l'app.
+
 ## Database
 
 - `pnpm db:generate` — nuova migrazione da `src/lib/server/db/schema.ts`.
@@ -51,7 +60,7 @@ Senza un dominio proprio le email partono da un account Gmail:
 - [x] Fase 2 — note ed editor: elenco per periodo, ricerca, tag, editor rich text con salvataggio automatico, giorno, fissate, schermo intero.
 - [x] Fase 3 — lista del giorno e todo: aggiunta rapida con riconoscimento di giorno, ora e ripetizione, modifica nella riga, scorrimento (Domani/Elimina), annulla, riordino, tastiera, ricorrenti.
 - [x] Fase 4 — home "Oggi": checklist dentro le note, card delle note del giorno, note raggruppate per periodo, todo in sospeso, segni sui giorni, calendario mensile.
-- [ ] Fase 5 — notifiche.
+- [x] Fase 5 — notifiche: push sui dispositivi (Profilo), promemoria di todo e note, invio dal cron ogni minuto.
 - [ ] Fase 6 — Google Calendar (e accesso con Google).
 - [ ] Fase 7 — AI con Gemini.
 - [ ] Fase 8 — PWA offline e pieghevoli.

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { LogOut } from '@lucide/svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import NotificationSettings from '#lib/components/NotificationSettings.svelte';
 	import PasswordField from '#lib/components/PasswordField.svelte';
 	import { dateTime, describeAgent } from '#lib/format.ts';
 	import type { PageProps } from './$types';
@@ -73,6 +74,8 @@
 		{/if}
 		<button class="btn-primary">Salva</button>
 	</form>
+
+	<NotificationSettings />
 
 	<form method="POST" action="?/password" class="frame flex flex-col gap-3.5 px-4 pt-5 pb-4.5">
 		<h2 class="ml-3 text-xl font-bold text-volt uppercase">

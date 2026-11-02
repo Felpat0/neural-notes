@@ -1,6 +1,7 @@
 import { addDays, monthsAgo, monthsParam, todayIn, weekOf } from '#lib/format.ts';
 import { DEFAULT_MONTHS, checklistIdsIn, groupNotes } from '#lib/notes.ts';
 import { hasOlderNotes, listNotes, notesForDay } from '#lib/server/notes.ts';
+import { noteReminders } from '#lib/server/reminders.ts';
 import { checklistItems, dayMarkers, dayTodos, overdueTodos } from '#lib/server/todos.ts';
 import type { PageServerLoad } from './$types';
 
@@ -29,11 +30,18 @@ export const load: PageServerLoad = async ({ locals, url, depends }) => {
 
 	// card "Note del giorno": con le checklist che compaiono nel loro testo
 	const idsByNote = dayNotes.map((n) => checklistIdsIn(n.content));
-	const items = await checklistItems(user, idsByNote.flat());
+	const [items, reminders] = await Promise.all([
+		checklistItems(user, idsByNote.flat()),
+		noteReminders(
+			user,
+			dayNotes.map((n) => n.id)
+		)
+	]);
 	const cards = dayNotes.map(({ content, ...note }, i) => {
 		void content;
 		return {
 			...note,
+			reminder: reminders.get(note.id) ?? null,
 			checklists: idsByNote[i].map((id) => ({ id, items: items.get(id) ?? [] }))
 		};
 	});

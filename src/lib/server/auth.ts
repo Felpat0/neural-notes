@@ -28,7 +28,7 @@ export type User = {
 	hasPassword: boolean;
 };
 
-const toUser = (row: typeof s.user.$inferSelect): User => ({
+export const toUser = (row: typeof s.user.$inferSelect): User => ({
 	id: row.id,
 	name: row.name,
 	email: row.email,

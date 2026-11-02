@@ -9,6 +9,7 @@
 	import { ChecklistEmbed } from '#lib/editor/checklist-embed.ts';
 	import { todoApi } from '#lib/todo-api.ts';
 	import {
+		Bell,
 		CalendarDays,
 		ChevronLeft,
 		Highlighter,
@@ -47,7 +48,16 @@
 	}>;
 	type Conflict = Omit<Note, 'id'> & { text: string };
 
-	let { note, today }: { note: Note; today: string } = $props();
+	let {
+		note,
+		today,
+		reminder: initialReminder
+	}: {
+		note: Note;
+		today: string;
+		/** prossimo promemoria, "AAAA-MM-GGTHH:MM" nel fuso dell'utente */
+		reminder: string | null;
+	} = $props();
 	// l'editor parte dalla versione caricata; da lì in poi lo stato è locale
 	const initial = untrack(() => note);
 	const iso = (d: Date | string) => new Date(d).toISOString();
@@ -311,6 +321,32 @@
 
 	// --- Giorno, tag, fissata ---
 
+	// --- Promemoria (non fa parte del salvataggio automatico: ha la sua rotta) ---
+
+	let reminder = $state(untrack(() => initialReminder));
+	const reminderLabel = (at: string) => {
+		const day = at.slice(0, 10);
+		const time = at.slice(11, 16);
+		return day === today
+			? time
+			: `${weekdayShort(day)} ${dayNumber(day)} ${monthShort(day)} · ${time}`;
+	};
+	async function setReminder(at: string | null) {
+		const old = reminder;
+		reminder = at;
+		try {
+			const res = await fetch(`/api/notes/${initial.id}/reminder`, {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ at })
+			});
+			if (!res.ok) throw new Error(String(res.status));
+		} catch {
+			reminder = old;
+			status = 'error';
+		}
+	}
+
 	function setDay(value: string | null) {
 		day = value || null;
 		change({ day }, 0);
@@ -454,6 +490,29 @@
 						class="ml-1 flex size-8.5 items-center justify-center border border-field text-dim"
 						aria-label="Togli il giorno"
 						onclick={() => setDay(null)}
+					>
+						<X size={14} aria-hidden="true" />
+					</button>
+				{/if}
+			</span>
+			<span class="relative inline-flex">
+				<label class="chip text-alert focus-within:outline-2 focus-within:outline-neon">
+					<Bell size={14} aria-hidden="true" />
+					{reminder ? reminderLabel(reminder) : 'Promemoria'}
+					<input
+						type="datetime-local"
+						value={reminder ?? ''}
+						min={`${today}T00:00`}
+						onchange={(e) => setReminder(e.currentTarget.value || null)}
+						class="absolute inset-0 cursor-pointer opacity-0"
+						aria-label="Promemoria della nota"
+					/>
+				</label>
+				{#if reminder}
+					<button
+						class="ml-1 flex size-8.5 items-center justify-center border border-field text-dim"
+						aria-label="Togli il promemoria"
+						onclick={() => setReminder(null)}
 					>
 						<X size={14} aria-hidden="true" />
 					</button>
