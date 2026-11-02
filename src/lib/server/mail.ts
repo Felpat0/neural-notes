@@ -8,13 +8,52 @@ export type Mail = { to: string; subject: string; html: string; text: string };
 
 let transporter: Transporter | null = null;
 
+const decode = (value: string) => {
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		return value;
+	}
+};
+
+/**
+ * SMTP_URL tollerante: aggiunge smtps:// se manca e codifica utente e password, così funziona
+ * anche scritto "utente@gmail.com:password@smtp.gmail.com:465" (con la @ non codificata).
+ * Le password per le app di Google si mostrano a gruppi di 4 lettere: gli spazi si tolgono.
+ */
+export function smtpUrl(raw: string) {
+	const value = raw.trim();
+	const scheme = value.match(/^smtps?:\/\//i)?.[0] ?? 'smtps://';
+	const rest = value.slice(value.match(/^smtps?:\/\//i)?.[0].length ?? 0);
+	const at = rest.lastIndexOf('@');
+	if (at <= 0) return scheme + rest;
+	const credentials = rest.slice(0, at);
+	const host = rest.slice(at + 1);
+	const colon = credentials.indexOf(':');
+	const user = decode(colon < 0 ? credentials : credentials.slice(0, colon));
+	let password = colon < 0 ? '' : decode(credentials.slice(colon + 1));
+	if (/^smtp\.gmail\.com/i.test(host)) password = password.replace(/\s+/g, '');
+	return `${scheme}${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}`;
+}
+
+/**
+ * Invia un'email; true se è partita. Un errore (SMTP sbagliato, Gmail che rifiuta) finisce nel
+ * log e non blocca chi la chiede: registrazione e reset vanno avanti, l'email si può rinviare.
+ */
 export async function sendMail(mail: Mail) {
 	if (!SMTP_URL) {
 		console.info(`\n[email] A: ${mail.to}\n[email] Oggetto: ${mail.subject}\n${mail.text}\n`);
-		return;
+		return true;
 	}
-	transporter ??= nodemailer.createTransport(SMTP_URL);
-	await transporter.sendMail({ from: MAIL_FROM, ...mail });
+	try {
+		transporter ??= nodemailer.createTransport(smtpUrl(SMTP_URL));
+		await transporter.sendMail({ from: MAIL_FROM, ...mail });
+		return true;
+	} catch (e) {
+		transporter = null;
+		console.error(`Invio email fallito (${mail.subject}):`, (e as Error).message);
+		return false;
+	}
 }
 
 /** Indirizzo assoluto per i link nelle email: PUBLIC_APP_URL, o l'origine della richiesta. */

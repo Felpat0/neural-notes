@@ -73,7 +73,8 @@ export const actions: Actions = {
 			return fail(429, { verifyError: 'Troppe richieste: riprova tra un’ora.' });
 		await recordFailure(keys, MAIL_LIMIT);
 		const token = await createAuthToken(me.id, 'verify');
-		await sendMail(verifyEmail(me.email, me.name, appUrl(url.origin, `/verifica/${token}`)));
+		if (!(await sendMail(verifyEmail(me.email, me.name, appUrl(url.origin, `/verifica/${token}`)))))
+			return fail(502, { verifyError: 'Invio non riuscito: riprova più tardi.' });
 		return { verifySent: true };
 	},
 
