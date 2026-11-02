@@ -406,23 +406,26 @@ html {
 @media (min-width: 600px) {
 	.app-nav {
 		inset: 0 auto 0 0;
-		width: 76px;
+		width: 80px;
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
 		border-top: 0;
 		border-right: 1px solid var(--color-volt);
 		padding: 0 0 max(16px, env(safe-area-inset-bottom));
 	}
 	.app-nav a {
-		min-height: 56px;
+		min-height: 60px;
+	}
+	/* "Calendario" deve stare nella barra */
+	.app-nav a .lbl {
+		letter-spacing: 0.06em;
 	}
 	.app-nav .app-nav-brand {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		height: 64px;
-		margin-bottom: 12px;
+		border-bottom: 1px solid var(--color-void);
 		background: var(--color-volt);
 		color: var(--color-void);
 		font-size: 20px;
@@ -433,7 +436,7 @@ html {
 		flex: 1;
 	}
 	.app-main {
-		padding-left: 76px;
+		padding-left: 80px;
 		padding-bottom: 0;
 	}
 }
