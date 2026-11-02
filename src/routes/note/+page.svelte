@@ -11,7 +11,7 @@
 {#if deleted}
 	<div
 		role="status"
-		class="fixed inset-x-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-30 flex min-h-13 items-center justify-between gap-3 bg-ink py-1.5 pr-1.5 pl-3.5 text-void cut md:right-auto md:bottom-6 md:left-[calc(76px+1.5rem)] md:w-96"
+		class="fixed inset-x-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-30 flex min-h-13 items-center justify-between gap-3 bg-ink py-1.5 pr-1.5 pl-3.5 text-void cut md:right-auto md:bottom-6 md:left-25 md:w-96"
 	>
 		<span class="font-bold">Nota eliminata</span>
 		<form method="POST" action="?/restore">

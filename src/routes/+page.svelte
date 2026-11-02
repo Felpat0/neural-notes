@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ChevronLeft, ChevronRight, Settings } from '@lucide/svelte';
+	import TodoList from '#lib/components/TodoList.svelte';
 	import { addDays, dayNumber, monthShort, weekdayName, weekdayShort } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
@@ -70,14 +71,28 @@
 		</div>
 	{/if}
 
-	<section aria-labelledby="day-list" class="frame flex flex-col gap-2 px-3.5 pt-4 pb-4">
-		<h2 id="day-list" class="ml-2.5 text-xl font-bold text-volt uppercase">Lista del giorno</h2>
-		<p class="text-[15px] text-dim">I todo del giorno arrivano con la fase 3.</p>
+	<section aria-label="Lista del giorno" class="frame flex flex-col px-3.5 pt-4 pb-2">
+		<!-- una lista nuova per ogni giorno: cambiando giorno non resta lo stato del precedente -->
+		{#key data.day}
+			<TodoList
+				title="Lista del giorno"
+				items={data.dayList.items}
+				checklistId={data.dayList.checklistId}
+				day={data.day}
+				today={data.today}
+				shortcuts
+			/>
+		{/key}
+		<a href="/ricorrenti" class="btn-link self-end lbl text-[10px]">Ricorrenti ›</a>
 	</section>
 
 	<section aria-labelledby="notes-title" class="flex flex-col gap-3">
 		<h2 id="notes-title" class="text-[34px] leading-none font-bold text-volt uppercase">Note</h2>
 		<h3 class="sep">Oggi <span class="text-[11px]">0</span></h3>
-		<p class="text-[15px] text-dim">Le note arrivano con la fase 2.</p>
+		<p class="text-[15px] text-dim">
+			Le note nella home arrivano con la fase 4: intanto sono in <a href="/note" class="btn-link"
+				>Note</a
+			>.
+		</p>
 	</section>
 </div>

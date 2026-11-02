@@ -11,10 +11,11 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
+		"test": "node --experimental-strip-types --no-warnings --test src/lib/*.test.ts",
 		"format": "prettier --write .",
 		"db:push": "drizzle-kit push",
 		"db:generate": "drizzle-kit generate",
-		"db:migrate": "drizzle-kit migrate",
+		"db:migrate": "node scripts/migrate.mjs",
 		"db:studio": "drizzle-kit studio",
 		"icons": "node scripts/icons.mjs"
 	},

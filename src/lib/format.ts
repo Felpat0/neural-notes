@@ -47,6 +47,49 @@ export const todayIn = (timeZone: string, now = new Date()) =>
 		day: '2-digit'
 	}).format(now);
 
+/** Ora (HH:MM) di un istante nel fuso indicato. */
+export const timeIn = (d: Date | string, timeZone: string) =>
+	new Intl.DateTimeFormat('it', {
+		hour: '2-digit',
+		minute: '2-digit',
+		hourCycle: 'h23',
+		timeZone
+	}).format(new Date(d));
+
+/** Istante corrispondente a giorno e ora locali in un fuso (tiene conto dell'ora legale). */
+export function zonedDateTime(day: string, time: string, timeZone: string) {
+	const target = Date.parse(`${day}T${time}:00Z`);
+	const offset = (instant: number) => {
+		const parts = Object.fromEntries(
+			new Intl.DateTimeFormat('en-US', {
+				timeZone,
+				hourCycle: 'h23',
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit'
+			})
+				.formatToParts(instant)
+				.map((p) => [p.type, p.value])
+		);
+		const local = Date.UTC(
+			Number(parts.year),
+			Number(parts.month) - 1,
+			Number(parts.day),
+			Number(parts.hour),
+			Number(parts.minute),
+			Number(parts.second)
+		);
+		return local - instant;
+	};
+	// due passaggi: il secondo corregge se l'ora legale cambia tra la stima e il risultato
+	let instant = target - offset(target);
+	instant = target - offset(instant);
+	return new Date(instant);
+}
+
 /** Giorno successivo/precedente di una data AAAA-MM-GG. */
 export function addDays(day: string, n: number) {
 	const d = new Date(`${day}T12:00:00Z`);

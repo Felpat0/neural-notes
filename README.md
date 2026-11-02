@@ -35,12 +35,13 @@ Senza un dominio proprio le email partono da un account Gmail:
 ## Database
 
 - `pnpm db:generate` — nuova migrazione da `src/lib/server/db/schema.ts`.
-- `pnpm db:migrate` — applica le migrazioni al database di `DATABASE_URL` (Neon).
+- `pnpm db:migrate` — applica le migrazioni al database di `DATABASE_URL` (Neon), via HTTP, mostrando l'errore se qualcosa va storto. Per un database creato con `db:push`: `pnpm db:migrate --baseline` (segna la prima migrazione come già applicata).
 - `pnpm db:studio` — Drizzle Studio.
 
 ## Comandi utili
 
 - `pnpm check` — controllo dei tipi.
+- `pnpm test` — test delle funzioni pure (ricorrenze, aggiunta rapida, date).
 - `pnpm lint` / `pnpm format` — Prettier ed ESLint.
 - `pnpm icons` — rigenera le icone dell'app in `static/icons`.
 
@@ -48,7 +49,7 @@ Senza un dominio proprio le email partono da un account Gmail:
 
 - [x] Fase 1 — base: progetto, tema, guscio responsive, schema e prima migrazione, account (registrazione, accesso, conferma email, password dimenticata, profilo).
 - [x] Fase 2 — note ed editor: elenco per periodo, ricerca, tag, editor rich text con salvataggio automatico, giorno, fissate, schermo intero.
-- [ ] Fase 3 — lista del giorno e todo.
+- [x] Fase 3 — lista del giorno e todo: aggiunta rapida con riconoscimento di giorno, ora e ripetizione, modifica nella riga, scorrimento (Domani/Elimina), annulla, riordino, tastiera, ricorrenti.
 - [ ] Fase 4 — home "Oggi" e note nella home.
 - [ ] Fase 5 — notifiche.
 - [ ] Fase 6 — Google Calendar (e accesso con Google).

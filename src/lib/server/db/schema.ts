@@ -209,6 +209,8 @@ export const todo = pgTable(
 		doneAt: timestamp('done_at', { withTimezone: true }),
 		// occorrenza di un todo ricorrente
 		ruleId: text('rule_id').references(() => todoRule.id, { onDelete: 'set null' }),
+		// eliminato: resta per "Annulla" e, per le occorrenze, perché non venga ricreato
+		deletedAt: timestamp('deleted_at', { withTimezone: true }),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},
