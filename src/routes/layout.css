@@ -1,0 +1,299 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/forms';
+
+@theme {
+	--font-sans: 'Chakra Petch', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+	/* compatto < 600 px (telefono, pieghevole chiuso) · medio 600–1023 · esteso ≥ 1024 */
+	--breakpoint-md: 600px;
+	--breakpoint-lg: 1024px;
+
+	/* Colori ripresi da cyberpunk.net: giallo dominante su nero, ciano e rosso come accenti. */
+	--color-void: #000000;
+	--color-panel: #0d0d0d;
+	--color-raised: #141414;
+	--color-volt: #fcee0a;
+	--color-neon: #00f0ff;
+	--color-alert: #fe1038;
+	--color-alert-soft: #140205;
+	--color-ink: #e6e6e6;
+	--color-soft: #cbcbcb;
+	/* testo secondario: ≈ 8:1 sul nero */
+	--color-dim: #a6a6a6;
+	--color-done: #7a7a7a;
+	--color-line: #262626;
+	--color-field: #4c4c4c;
+}
+
+html {
+	color-scheme: dark;
+	background: var(--color-void);
+	color: var(--color-ink);
+	-webkit-tap-highlight-color: transparent;
+}
+
+@layer base {
+	a {
+		color: inherit;
+		text-decoration: none;
+	}
+	:focus-visible {
+		outline: 2px solid var(--color-neon);
+		outline-offset: 2px;
+	}
+	h1,
+	h2,
+	h3 {
+		text-wrap: balance;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+   Componenti di base
+   --------------------------------------------------------------------------- */
+
+/* Riquadro: bordo sottile e triangolo pieno nell'angolo in alto a sinistra. */
+@utility frame {
+	position: relative;
+	border: 1px solid var(--color-volt);
+	background: var(--color-void);
+	&::before {
+		content: '';
+		position: absolute;
+		left: -1px;
+		top: -1px;
+		border-right: 16px solid transparent;
+		border-top: 16px solid var(--color-volt);
+		pointer-events: none;
+	}
+}
+@utility frame-neon {
+	@apply frame;
+	border-color: var(--color-neon);
+	&::before {
+		border-top-color: var(--color-neon);
+	}
+}
+
+/* Pannello con bordo superiore spesso (avvisi, campo in modifica, fogli). */
+@utility panel-top {
+	border: 1px solid currentColor;
+	border-top-width: 6px;
+}
+
+/* Angolo in basso a destra tagliato. */
+@utility cut {
+	clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+}
+
+/* Fascia di gruppo: barra gialla, testo nero maiuscolo, angolo tagliato. */
+@utility sep {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 30px;
+	margin: 0;
+	padding: 0 18px 0 12px;
+	background: var(--color-volt);
+	color: var(--color-void);
+	font-size: 14px;
+	font-weight: 700;
+	letter-spacing: 2px;
+	text-transform: uppercase;
+	clip-path: polygon(0 0, 100% 0, 100% 40%, calc(100% - 12px) 100%, 0 100%);
+}
+
+/* Etichetta: piccola, maiuscola, spaziata. */
+@utility lbl {
+	font-size: 11px;
+	letter-spacing: 2px;
+	text-transform: uppercase;
+}
+
+/* Fascia nera a intagli sul bordo inferiore delle intestazioni gialle. */
+@utility notch {
+	height: 6px;
+	background: linear-gradient(
+		90deg,
+		#000 28px,
+		transparent 0,
+		transparent calc(50% - 14px),
+		#000 calc(50% - 14px),
+		#000 calc(50% + 14px),
+		transparent calc(50% + 14px),
+		transparent calc(100% - 28px),
+		#000 calc(100% - 28px)
+	);
+}
+
+@utility input {
+	width: 100%;
+	min-height: 48px;
+	border: 1px solid var(--color-field);
+	border-radius: 0;
+	background: var(--color-void);
+	color: #fff;
+	padding: 0 12px;
+	font-size: 16px;
+	&:focus {
+		outline: none;
+		border-color: var(--color-volt);
+		box-shadow: none;
+	}
+	&[aria-invalid='true'] {
+		border-color: var(--color-alert);
+	}
+	&::placeholder {
+		color: var(--color-dim);
+	}
+}
+
+@utility btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	min-height: 48px;
+	padding: 0 18px;
+	border: 1px solid var(--color-field);
+	background: var(--color-void);
+	color: var(--color-ink);
+	font-size: 14px;
+	font-weight: 700;
+	letter-spacing: 2px;
+	text-transform: uppercase;
+	cursor: pointer;
+	&:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+}
+@utility btn-primary {
+	@apply btn cut;
+	border: 0;
+	background: var(--color-volt);
+	color: var(--color-void);
+	&:hover:not(:disabled) {
+		background: #fff35c;
+	}
+}
+@utility btn-outline {
+	@apply btn;
+	border-color: var(--color-volt);
+	color: var(--color-volt);
+}
+@utility btn-danger {
+	@apply btn;
+	border-color: var(--color-alert);
+	color: var(--color-alert);
+}
+@utility btn-link {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	color: var(--color-neon);
+	font-weight: 700;
+	cursor: pointer;
+	&:hover {
+		color: var(--color-volt);
+	}
+}
+
+/* Casella da spuntare quadrata, gialla quando è fatta. */
+@utility box {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	flex: none;
+	box-sizing: border-box;
+	border: 2px solid var(--color-volt);
+	background: transparent;
+}
+@utility box-on {
+	@apply box;
+	background: var(--color-volt);
+	color: var(--color-void);
+}
+
+/* ---------------------------------------------------------------------------
+   Guscio dell'app: barra in basso (compatto) → rail a sinistra (da 600 px).
+   Sui pieghevoli aperti a libro la rail resta nella metà sinistra.
+   --------------------------------------------------------------------------- */
+.app-nav {
+	position: fixed;
+	inset: auto 0 0 0;
+	z-index: 20;
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	border-top: 1px solid var(--color-volt);
+	background: var(--color-void);
+	padding-bottom: env(safe-area-inset-bottom);
+}
+.app-nav a {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	min-height: 64px;
+	color: var(--color-soft);
+}
+.app-nav a[aria-current='page'] {
+	background: var(--color-volt);
+	color: var(--color-void);
+	font-weight: 700;
+}
+.app-nav .app-nav-brand,
+.app-nav .app-nav-spacer {
+	display: none;
+}
+.app-main {
+	min-height: 100dvh;
+	padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 600px) {
+	.app-nav {
+		inset: 0 auto 0 0;
+		width: 76px;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		border-top: 0;
+		border-right: 1px solid var(--color-volt);
+		padding: 0 0 max(16px, env(safe-area-inset-bottom));
+	}
+	.app-nav a {
+		min-height: 56px;
+	}
+	.app-nav .app-nav-brand {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: 64px;
+		margin-bottom: 12px;
+		background: var(--color-volt);
+		color: var(--color-void);
+		font-size: 20px;
+		font-weight: 700;
+	}
+	.app-nav .app-nav-spacer {
+		display: block;
+		flex: 1;
+	}
+	.app-main {
+		padding-left: 76px;
+		padding-bottom: 0;
+	}
+}

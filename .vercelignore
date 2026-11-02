@@ -1,0 +1,7 @@
+# File locali da non caricare con "vercel deploy"
+.env
+.env.*
+!.env.example
+.pglite
+.svelte-kit
+node_modules

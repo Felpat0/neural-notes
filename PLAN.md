@@ -6,19 +6,19 @@ Mockup: https://claude.ai/artifact/XeabCjRjZwEaN2uj4pEgbL (Oggi, Editor, Modific
 
 ## Stack (come `../japan-trip`)
 
-| Parte | Scelta |
-| --- | --- |
-| Framework | SvelteKit 3, Svelte 5 (runes forzate in `vite.config.ts`), TypeScript |
-| Stile | Tailwind 4 (`@tailwindcss/vite`), token del tema in `src/routes/layout.css` |
-| DB | Neon Postgres (piano gratuito) con `drizzle-orm/neon-http`; PGlite in locale (`DATABASE_URL="pglite:./.pglite"`) |
-| Migrazioni | `drizzle-kit` (`db:generate`, `db:migrate`, `db:studio`) |
-| Deploy | Vercel, `@sveltejs/adapter-vercel` con `regions: ['fra1']` (vicino a Neon `eu-central-1`) |
-| Push | `web-push` + chiavi VAPID, service worker in `src/service-worker/` |
-| Cron | cron-job.org ogni minuto → `/api/cron/notify` con `CRON_SECRET` (il cron di Vercel Hobby è solo giornaliero) |
-| Editor | Tiptap 3 (`@tiptap/core` + starter-kit, senza wrapper React) montato in un'azione Svelte |
-| Icone | `@lucide/svelte` |
-| Env | `src/env.ts` con `defineEnvVars`, come in japan-trip |
-| Package manager | pnpm |
+| Parte           | Scelta                                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Framework       | SvelteKit 3, Svelte 5 (runes forzate in `vite.config.ts`), TypeScript                                            |
+| Stile           | Tailwind 4 (`@tailwindcss/vite`), token del tema in `src/routes/layout.css`                                      |
+| DB              | Neon Postgres (piano gratuito) con `drizzle-orm/neon-http`; PGlite in locale (`DATABASE_URL="pglite:./.pglite"`) |
+| Migrazioni      | `drizzle-kit` (`db:generate`, `db:migrate`, `db:studio`)                                                         |
+| Deploy          | Vercel, `@sveltejs/adapter-vercel` con `regions: ['fra1']` (vicino a Neon `eu-central-1`)                        |
+| Push            | `web-push` + chiavi VAPID, service worker in `src/service-worker/`                                               |
+| Cron            | cron-job.org ogni minuto → `/api/cron/notify` con `CRON_SECRET` (il cron di Vercel Hobby è solo giornaliero)     |
+| Editor          | Tiptap 3 (`@tiptap/core` + starter-kit, senza wrapper React) montato in un'azione Svelte                         |
+| Icone           | `@lucide/svelte`                                                                                                 |
+| Env             | `src/env.ts` con `defineEnvVars`, come in japan-trip                                                             |
+| Package manager | pnpm                                                                                                             |
 
 Da japan-trip si riprendono quasi invariati: `lib/server/auth.ts` + `password.ts` + `password-rules.ts` (email/password scrypt, sessioni in DB, limite tentativi; da estendere con registrazione ed email), `lib/server/push.ts`, `lib/server/db/{index,local}.ts`, la struttura di `hooks.server.ts` (path pubblici, redirect a `/login`), il service worker (cache-first per gli statici, network-first per pagine e `__data.json`) e `scripts/icons.mjs` per le icone del manifest.
 
@@ -205,12 +205,12 @@ Sincronizzazione nei due sensi con l'API Google Calendar v3 (chiamate `fetch` di
 
 **App → Google** (nel calendario dell'app, scelte nelle impostazioni)
 
-| Elemento | Evento |
-| --- | --- |
-| Todo con orario | evento di 30 minuti all'orario, titolo = testo del todo; spuntato → titolo con "✓" |
-| Todo senza orario (opzionale, spento di default) | evento di tutta la giornata |
-| Nota assegnata a un giorno | evento all'ora del promemoria o di tutta la giornata; descrizione = prime righe + link `/note/<id>` |
-| Todo e note ricorrenti | evento ricorrente con `RRULE` derivata da `repeat` |
+| Elemento                                         | Evento                                                                                              |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Todo con orario                                  | evento di 30 minuti all'orario, titolo = testo del todo; spuntato → titolo con "✓"                  |
+| Todo senza orario (opzionale, spento di default) | evento di tutta la giornata                                                                         |
+| Nota assegnata a un giorno                       | evento all'ora del promemoria o di tutta la giornata; descrizione = prime righe + link `/note/<id>` |
+| Todo e note ricorrenti                           | evento ricorrente con `RRULE` derivata da `repeat`                                                  |
 
 - Le modifiche locali vengono messe in coda (`google_outbox`) e inviate subito dopo la risposta (`waitUntil` di Vercel) o al giro di cron successivo.
 - Conflitti: vince la modifica più recente confrontando `local_updated` e `google_updated`; con `If-Match` sull'etag per non sovrascrivere una modifica arrivata nel frattempo.
@@ -235,15 +235,15 @@ Stesso collegamento di japan-trip: chiamate REST dirette a `https://generativela
 
 **Funzioni**
 
-| Funzione | Dove | Come |
-| --- | --- | --- |
-| **Riassumi** | ✦ nell'editor → Assistente | 3–6 punti in italiano; "Inserisci in cima" aggiunge un blocco citazione "✦ Riassunto" alla nota, oppure Copia / Rigenera. Risposta in streaming (`streamGenerateContent`, SSE). |
-| **Estrai todo** | Assistente | Gemini restituisce JSON (`responseSchema`: `[{ text, day?, time? }]`); le proposte compaiono spuntabili e si aggiungono alla checklist della nota o alla lista del giorno solo dopo conferma, come le proposte dell'Inbox di japan-trip. |
-| **Riscrivi** | Assistente, o sul testo selezionato | Correggi, accorcia, rendi elenco puntato, tono formale; anteprima con "Sostituisci". |
-| **Chiedi su questa nota** | campo in fondo all'Assistente | Domanda libera con il testo della nota come contesto. |
-| **Chiedi alle note** | Ricerca → scheda "✦ Chiedi alle note" | Ricerca per significato con embedding (vedi sotto) + risposta di Gemini con citazioni numerate [1] [2] che aprono note e todo. Se le note non contengono la risposta lo dice, senza inventare. |
-| **Cerca sul web** | Assistente | Richiesta con `google_search` (es. "orari dell'ufficio anagrafe"); il risultato si inserisce nella nota con le fonti come link. |
-| **Riepilogo della giornata** (facoltativo) | home, la sera | Cosa è stato fatto, cosa resta, note del giorno. |
+| Funzione                                   | Dove                                  | Come                                                                                                                                                                                                                                     |
+| ------------------------------------------ | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Riassumi**                               | ✦ nell'editor → Assistente            | 3–6 punti in italiano; "Inserisci in cima" aggiunge un blocco citazione "✦ Riassunto" alla nota, oppure Copia / Rigenera. Risposta in streaming (`streamGenerateContent`, SSE).                                                          |
+| **Estrai todo**                            | Assistente                            | Gemini restituisce JSON (`responseSchema`: `[{ text, day?, time? }]`); le proposte compaiono spuntabili e si aggiungono alla checklist della nota o alla lista del giorno solo dopo conferma, come le proposte dell'Inbox di japan-trip. |
+| **Riscrivi**                               | Assistente, o sul testo selezionato   | Correggi, accorcia, rendi elenco puntato, tono formale; anteprima con "Sostituisci".                                                                                                                                                     |
+| **Chiedi su questa nota**                  | campo in fondo all'Assistente         | Domanda libera con il testo della nota come contesto.                                                                                                                                                                                    |
+| **Chiedi alle note**                       | Ricerca → scheda "✦ Chiedi alle note" | Ricerca per significato con embedding (vedi sotto) + risposta di Gemini con citazioni numerate [1] [2] che aprono note e todo. Se le note non contengono la risposta lo dice, senza inventare.                                           |
+| **Cerca sul web**                          | Assistente                            | Richiesta con `google_search` (es. "orari dell'ufficio anagrafe"); il risultato si inserisce nella nota con le fonti come link.                                                                                                          |
+| **Riepilogo della giornata** (facoltativo) | home, la sera                         | Cosa è stato fatto, cosa resta, note del giorno.                                                                                                                                                                                         |
 
 **Ricerca per significato**
 
@@ -269,11 +269,11 @@ Stesso collegamento di japan-trip: chiamate REST dirette a `https://generativela
 
 Tre configurazioni, scelte con media query sulla larghezza e sui segmenti dello schermo:
 
-| Classe | Larghezza | Layout |
-| --- | --- | --- |
-| Compatto | < 600 px (telefono, foldable chiuso) | una colonna, barra in basso, FAB, editor a schermo intero, fogli dal basso |
-| Medio | 600–1023 px (foldable aperto, tablet verticale) | lista + dettaglio su due pannelli; navigazione a rail |
-| Esteso | ≥ 1024 px (tablet orizzontale, desktop) | rail + elenco note + editor + pannello "Oggi" a destra |
+| Classe   | Larghezza                                       | Layout                                                                     |
+| -------- | ----------------------------------------------- | -------------------------------------------------------------------------- |
+| Compatto | < 600 px (telefono, foldable chiuso)            | una colonna, barra in basso, FAB, editor a schermo intero, fogli dal basso |
+| Medio    | 600–1023 px (foldable aperto, tablet verticale) | lista + dettaglio su due pannelli; navigazione a rail                      |
+| Esteso   | ≥ 1024 px (tablet orizzontale, desktop)         | rail + elenco note + editor + pannello "Oggi" a destra                     |
 
 - **Foldable**: con `@media (horizontal-viewport-segments: 2)` la griglia usa `env(viewport-segment-width 0 0)` e `env(viewport-segment-left 1 0)` per mettere i due pannelli ai lati della cerniera, senza contenuti sopra di essa. In postura "libro" verticale (`vertical-viewport-segments: 2`): editor sopra, toolbar e tastiera sotto.
 - **Nota a schermo intero** (configurazioni media ed estesa): pulsante "Schermo intero" nella toolbar dell'editor (e doppio tocco sul titolo). Nasconde rail ed elenco e dà alla nota tutta la larghezza; "Riduci" o Esc torna a lista + dettaglio. La scelta resta per quel dispositivo (`localStorage`) e la URL non cambia (`?full=1` solo per poterla condividere o ricaricare).
@@ -290,15 +290,15 @@ Linguaggio visivo ripreso da cyberpunk.net: giallo dominante su nero, ciano e ro
 
 Token in `layout.css` (`@theme` di Tailwind 4):
 
-| Token | Valore | Uso |
-| --- | --- | --- |
-| `--color-void` | `#000000` | fondo |
-| `--color-volt` | `#FCEE0A` | colore principale: intestazioni, titoli, bordi dei riquadri, pulsanti pieni, barra della toolbar |
-| `--color-neon` | `#00F0FF` | note e checklist delle note, link, stato "salvata" |
-| `--color-alert` | `#FE1038` | promemoria, eliminazione, indicatori sui giorni |
-| `--color-ink` | `#E6E6E6` | testo |
-| `--color-dim` | `#A6A6A6` | testo secondario (≈ 8:1 sul nero) |
-| `--color-line` | `#262626` / `#4C4C4C` | separatori / bordi dei campi |
+| Token           | Valore                | Uso                                                                                              |
+| --------------- | --------------------- | ------------------------------------------------------------------------------------------------ |
+| `--color-void`  | `#000000`             | fondo                                                                                            |
+| `--color-volt`  | `#FCEE0A`             | colore principale: intestazioni, titoli, bordi dei riquadri, pulsanti pieni, barra della toolbar |
+| `--color-neon`  | `#00F0FF`             | note e checklist delle note, link, stato "salvata"                                               |
+| `--color-alert` | `#FE1038`             | promemoria, eliminazione, indicatori sui giorni                                                  |
+| `--color-ink`   | `#E6E6E6`             | testo                                                                                            |
+| `--color-dim`   | `#A6A6A6`             | testo secondario (≈ 8:1 sul nero)                                                                |
+| `--color-line`  | `#262626` / `#4C4C4C` | separatori / bordi dei campi                                                                     |
 
 Componenti e motivi (in `lib/components/`):
 
