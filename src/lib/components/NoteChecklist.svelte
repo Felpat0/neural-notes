@@ -3,6 +3,7 @@
 	import { ListChecks, X } from '@lucide/svelte';
 	import TodoList from '#lib/components/TodoList.svelte';
 	import { outbox } from '#lib/outbox.svelte.ts';
+	import { sync } from '#lib/sync.svelte.ts';
 	import { todoApi, type TodoItem } from '#lib/todo-api.ts';
 
 	// Checklist dentro una nota: montata dall'editor (blocco "checklistEmbed"), carica i suoi todo.
@@ -15,6 +16,20 @@
 
 	let items = $state<TodoItem[] | null>(null);
 	let failed = $state(false);
+
+	// todo cambiati su un altro dispositivo: la lista riparte dai dati nuovi
+	let seen = sync.changes;
+	$effect(() => {
+		if (sync.changes === seen) return;
+		seen = sync.changes;
+		void todoApi<{ items: TodoItem[] }>('list', { checklistId })
+			.then(({ items: fresh }) => {
+				if (!outbox.idle) return;
+				items = fresh;
+				void outbox.saveChecklist(checklistId, fresh);
+			})
+			.catch(() => undefined);
+	});
 
 	onMount(async () => {
 		try {
@@ -47,7 +62,9 @@
 		{/if}
 	</div>
 	{#if items}
-		<TodoList {items} {checklistId} day={today} {today} variant="note" />
+		{#key items}
+			<TodoList {items} {checklistId} day={today} {today} variant="note" />
+		{/key}
 	{:else if failed}
 		<p class="pb-2 text-sm text-alert">Checklist non disponibile senza connessione.</p>
 	{:else}

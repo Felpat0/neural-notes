@@ -127,6 +127,29 @@
 		if (event.tags && !pending.tags && !outbox.note(initial.id)?.patch.tags) tags = event.tags;
 	});
 
+	// nota cambiata su un altro dispositivo (dati ricaricati da lib/sync): se qui non ci sono
+	// modifiche da salvare si mostra la versione nuova; altrimenti ci pensa il conflitto al salvataggio
+	$effect(() => {
+		const fresh = note;
+		untrack(() => {
+			if (!fresh.updatedAt || !base || !editor) return;
+			if (new Date(fresh.updatedAt) <= new Date(base)) return;
+			if (typing || Object.keys(pending).length || outbox.note(initial.id)) return;
+			const { from, to } = editor.state.selection;
+			applying = true;
+			editor.commands.setContent((fresh.content as JSONContent) ?? '', { emitUpdate: false });
+			applying = false;
+			// il cursore resta dov'era (per quanto possibile nel testo nuovo)
+			const end = editor.state.doc.content.size;
+			editor.commands.setTextSelection({ from: Math.min(from, end), to: Math.min(to, end) });
+			title = fresh.title;
+			day = fresh.day;
+			tags = fresh.tags;
+			pinned = fresh.pinned;
+			base = iso(fresh.updatedAt);
+		});
+	});
+
 	/** Conflitto: tiene la versione salvata dall'altro dispositivo. */
 	function useTheirs() {
 		if (!conflict) return;
@@ -334,6 +357,13 @@
 			? time
 			: `${weekdayShort(day)} ${dayNumber(day)} ${monthShort(day)} · ${time}`;
 	};
+	// cambiato su un altro dispositivo (dati ricaricati): vale se qui non ce n'è uno da inviare
+	$effect(() => {
+		const fresh = initialReminder;
+		untrack(() => {
+			if (!outbox.reminder(initial.id)) reminder = fresh;
+		});
+	});
 	function setReminder(at: string | null) {
 		reminder = at;
 		outbox.setReminder(initial.id, at);

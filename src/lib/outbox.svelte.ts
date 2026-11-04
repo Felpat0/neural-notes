@@ -110,6 +110,7 @@ class Outbox {
 	#started = false;
 	#waiters = new Map<string, (outcome: Outcome) => void>();
 	#listeners = new Set<(event: NoteSaved) => void>();
+	#sentListeners = new Set<() => void>();
 	#notesTimer: ReturnType<typeof setTimeout> | undefined;
 
 	/** Carica la coda dell'utente (chiamata dal load del layout, prima di mostrare le pagine). */
@@ -133,6 +134,11 @@ class Outbox {
 	}
 
 	// --- Lettura (reattiva) ---
+
+	/** Coda vuota e nessun invio in corso: i dati del server comprendono tutte le modifiche. */
+	get idle() {
+		return !this.#running && !this.entries.length;
+	}
 
 	get todoOps(): TodoOp[] {
 		return this.entries.flatMap((e) => (e.kind === 'todo' ? [e.body] : []));
@@ -223,6 +229,12 @@ class Outbox {
 		return () => void this.#listeners.delete(listener);
 	}
 
+	/** Avviso dopo un giro di invii riuscito (le modifiche di questo dispositivo sono sul server). */
+	onSent(listener: () => void) {
+		this.#sentListeners.add(listener);
+		return () => void this.#sentListeners.delete(listener);
+	}
+
 	notify(message: string) {
 		const id = Date.now() + Math.random();
 		this.notices = [...this.notices, { id, message }];
@@ -292,6 +304,7 @@ class Outbox {
 			}
 		} finally {
 			this.#running = false;
+			if (sent) for (const listener of this.#sentListeners) listener();
 		}
 	}
 

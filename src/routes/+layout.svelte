@@ -10,6 +10,7 @@
 	import { onMount } from 'svelte';
 	import SyncStatus from '#lib/components/SyncStatus.svelte';
 	import { warmPages } from '#lib/offline-pages.ts';
+	import { sync } from '#lib/sync.svelte.ts';
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
@@ -18,6 +19,10 @@
 	// se sono vecchie)
 	onMount(() => {
 		if (data.user) warmPages(['/', '/note', '/calendario', '/ricorrenti']);
+	});
+	// dati aggiornati da soli con le modifiche fatte da un altro dispositivo (anche dopo l'accesso)
+	$effect(() => {
+		if (data.user) sync.start();
 	});
 
 	// editor di una nota (anche di una creata offline, /bozza/<id>)
