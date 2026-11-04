@@ -252,3 +252,114 @@ export const aiUsage = pgTable(
 	},
 	(t) => [primaryKey({ columns: [t.userId, t.day] })]
 );
+
+// --- Google (accesso e Google Calendar) ---
+
+/** Collegamento a Google Calendar: token cifrati (server/google/crypto.ts) e scelte dell'utente. */
+export const googleAccount = pgTable('google_account', {
+	userId: text('user_id')
+		.primaryKey()
+		.references(() => user.id, { onDelete: 'cascade' }),
+	googleSub: text('google_sub').notNull(),
+	email: text('email').notNull(),
+	refreshToken: text('refresh_token_enc').notNull(),
+	accessToken: text('access_token_enc'),
+	expiresAt: timestamp('expires_at', { withTimezone: true }),
+	// calendario "NEURAL//NOTES" creato dall'app, dove finiscono todo e note
+	targetCalendarId: text('target_calendar_id'),
+	// calendari mostrati nell'agenda della home
+	readCalendarIds: text('read_calendar_ids').array().notNull().default([]),
+	pushTodos: boolean('push_todos').notNull().default(true),
+	pushUntimedTodos: boolean('push_untimed_todos').notNull().default(false),
+	pushNotes: boolean('push_notes').notNull().default(true),
+	pullChanges: boolean('pull_changes').notNull().default(true),
+	// ultima lettura delle modifiche fatte in Google al calendario dell'app
+	pulledAt: timestamp('pulled_at', { withTimezone: true }),
+	syncedAt: timestamp('synced_at', { withTimezone: true }),
+	lastError: text('last_error'),
+	createdAt: createdAt()
+});
+
+/** Calendari letti (e quello dell'app), con il canale di notifica di Google (events.watch). */
+export const googleCalendar = pgTable(
+	'google_calendar',
+	{
+		userId: userId(),
+		calendarId: text('calendar_id').notNull(),
+		name: text('name').notNull().default(''),
+		color: text('color'),
+		channelId: text('channel_id'),
+		channelResourceId: text('channel_resource_id'),
+		channelExpiresAt: timestamp('channel_expires_at', { withTimezone: true })
+	},
+	(t) => [
+		primaryKey({ columns: [t.userId, t.calendarId] }),
+		uniqueIndex('google_calendar_channel_idx').on(t.channelId)
+	]
+);
+
+export const GOOGLE_KINDS = ['todo', 'rule', 'note'] as const;
+export type GoogleKind = (typeof GOOGLE_KINDS)[number];
+
+/**
+ * Evento del calendario dell'app creato per un todo, un todo ricorrente o una nota. `hash` è
+ * l'ultimo contenuto inviato (se non cambia non si scrive); `detachedHash` segna un evento
+ * eliminato in Google, che non si ricrea finché l'elemento non cambia.
+ */
+export const googleEventLink = pgTable(
+	'google_event_link',
+	{
+		userId: userId(),
+		kind: text('kind').$type<GoogleKind>().notNull(),
+		entityId: text('entity_id').notNull(),
+		eventId: text('event_id').notNull(),
+		etag: text('etag'),
+		hash: text('hash'),
+		detachedHash: text('detached_hash'),
+		updatedAt: updatedAt()
+	},
+	(t) => [
+		primaryKey({ columns: [t.kind, t.entityId] }),
+		index('google_event_link_event_idx').on(t.userId, t.eventId)
+	]
+);
+
+/** Elementi da riscrivere in Google: inviati subito dopo la risposta o dal cron. */
+export const googleOutbox = pgTable(
+	'google_outbox',
+	{
+		userId: userId(),
+		kind: text('kind').$type<GoogleKind>().notNull(),
+		entityId: text('entity_id').notNull(),
+		attempts: integer('attempts').notNull().default(0),
+		lastError: text('last_error'),
+		createdAt: createdAt()
+	},
+	(t) => [
+		primaryKey({ columns: [t.kind, t.entityId] }),
+		index('google_outbox_user_idx').on(t.userId)
+	]
+);
+
+/** Eventi dei calendari letti, per l'agenda della home: orari (start/end) o di tutto il giorno. */
+export const googleEvent = pgTable(
+	'google_event',
+	{
+		userId: userId(),
+		calendarId: text('calendar_id').notNull(),
+		eventId: text('event_id').notNull(),
+		title: text('title').notNull().default(''),
+		location: text('location'),
+		htmlLink: text('html_link'),
+		start: timestamp('start', { withTimezone: true }),
+		end: timestamp('end', { withTimezone: true }),
+		// tutto il giorno: dal primo giorno compreso all'ultimo escluso
+		startDay: date('start_day', { mode: 'string' }),
+		endDay: date('end_day', { mode: 'string' })
+	},
+	(t) => [
+		primaryKey({ columns: [t.userId, t.calendarId, t.eventId] }),
+		index('google_event_start_idx').on(t.userId, t.start),
+		index('google_event_day_idx').on(t.userId, t.startDay)
+	]
+);

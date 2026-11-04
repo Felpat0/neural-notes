@@ -40,7 +40,19 @@ export const variables = defineEnvVars({
 		schema: optional
 	},
 	CRON_SECRET: {
-		description: 'Segreto richiesto da /api/cron/notify (chiamato ogni minuto da cron-job.org).',
+		description: 'Segreto richiesto da /api/cron/notify e /api/cron/google (cron-job.org).',
+		schema: optional
+	},
+	// Google: accesso con Google e Google Calendar. Senza client OAuth restano nascosti.
+	GOOGLE_CLIENT_ID: { description: 'Client OAuth "Web" (Google Cloud Console).', schema: optional },
+	GOOGLE_CLIENT_SECRET: { description: 'Segreto del client OAuth.', schema: optional },
+	GOOGLE_TOKEN_KEY: {
+		description:
+			'32 byte casuali in base64, per cifrare i token di Google Calendar nel DB (senza: niente Calendar).',
+		schema: optional
+	},
+	GOOGLE_API_BASE: {
+		description: 'Solo per i test in locale: un finto server Google al posto di quelli veri.',
 		schema: optional
 	}
 });

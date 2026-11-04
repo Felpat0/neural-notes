@@ -1,6 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import { cleanTags } from '#lib/notes.ts';
-import { updateNote, type NotePatch } from '#lib/server/notes.ts';
+import { queueGoogle } from '#lib/server/google/calendar.ts';
+import { trashNote, updateNote, type NotePatch } from '#lib/server/notes.ts';
 import type { RequestHandler } from './$types';
 
 const MAX_CONTENT_BYTES = 512 * 1024;
@@ -51,5 +52,15 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			{ status: 409 }
 		);
 	}
+	// titolo, testo e giorno finiscono nell'evento di Google Calendar
+	if ('title' in patch || 'text' in patch || 'day' in patch)
+		await queueGoogle(locals.user!.id, [['note', params.id]]);
 	return json({ updatedAt: result.updatedAt, tags: patch.tags });
+};
+
+/** Nel cestino (come l'azione ?/delete della pagina, ma anche dalla coda offline). */
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+	await trashNote(locals.user!.id, params.id);
+	await queueGoogle(locals.user!.id, [['note', params.id]]);
+	return json({ ok: true });
 };

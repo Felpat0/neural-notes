@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { forgetPages } from '#lib/offline-pages.ts';
 	import AuthShell from '#lib/components/AuthShell.svelte';
+	import GoogleButton from '#lib/components/GoogleButton.svelte';
 	import PasswordField from '#lib/components/PasswordField.svelte';
 	import type { PageProps } from './$types';
 
@@ -8,6 +11,23 @@
 
 	// l'azione conserva ?next= per tornare alla pagina chiesta
 	const next = $derived(page.url.searchParams.get('next'));
+
+	// ritorno da "Continua con Google" non riuscito
+	const GOOGLE_ERRORS: Record<string, string> = {
+		annullato: 'Accesso con Google annullato.',
+		scaduto: 'Richiesta scaduta: riprova.',
+		errore: 'Accesso con Google non riuscito: riprova.',
+		'non-confermata':
+			'Esiste già un account con questa email, non ancora confermata: accedi con la password e conferma l’indirizzo.',
+		'in-uso': 'Questa email è già collegata a un altro account Google.',
+		chiusa: 'Le registrazioni sono chiuse: serve un account già esistente.',
+		codice: 'Per registrarti serve il codice d’invito: usa la pagina Registrati.'
+	};
+	const googleError = $derived(GOOGLE_ERRORS[page.url.searchParams.get('google') ?? '']);
+
+	// fuori dall'account (uscita o sessione scaduta): via le pagine salvate per l'uso offline;
+	// le modifiche in coda restano e partono al prossimo accesso dello stesso utente
+	onMount(forgetPages);
 </script>
 
 <svelte:head><title>Accedi · NEURAL//NOTES</title></svelte:head>
@@ -46,8 +66,12 @@
 			Resta collegato su questo dispositivo
 		</label>
 		{#if form?.error}<p class="text-sm font-semibold text-alert" role="alert">{form.error}</p>{/if}
+		{#if googleError && !form}
+			<p class="text-sm font-semibold text-alert" role="alert">{googleError}</p>
+		{/if}
 		<button class="btn-primary h-13">Accedi</button>
 	</form>
+	{#if data.googleEnabled}<GoogleButton {next} />{/if}
 
 	{#if data.signupOpen}
 		<p class="text-center text-[15px] text-soft">

@@ -1,4 +1,5 @@
 import { error, json } from '@sveltejs/kit';
+import { queueGoogle } from '#lib/server/google/calendar.ts';
 import { setNoteReminder } from '#lib/server/reminders.ts';
 import type { RequestHandler } from './$types';
 
@@ -12,5 +13,6 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 		error(400, 'Data e ora non valide');
 	if (!(await setNoteReminder(locals.user!, params.id, at as string | null)))
 		error(404, 'Nota non trovata');
+	await queueGoogle(locals.user!.id, [['note', params.id]]);
 	return json({ at });
 };

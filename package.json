@@ -65,6 +65,7 @@
 		"@tiptap/extensions": "^3.32.2",
 		"@tiptap/pm": "^3.32.2",
 		"@tiptap/starter-kit": "^3.32.2",
+		"@vercel/functions": "^3.10.5",
 		"nodemailer": "^7.0.10",
 		"web-push": "^3.6.7"
 	}

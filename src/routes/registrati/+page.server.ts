@@ -15,12 +15,13 @@ import {
 } from '#lib/server/auth.ts';
 import { appUrl, sendMail, signupAttemptEmail, verifyEmail } from '#lib/server/mail.ts';
 import { passwordProblem } from '#lib/server/password.ts';
+import { googleLoginEnabled } from '#lib/server/google/client.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
 	if (locals.user) redirect(303, '/');
 	if (!signupOpen()) error(404, 'La registrazione è chiusa');
-	return { needsCode: signupNeedsCode() };
+	return { needsCode: signupNeedsCode(), googleEnabled: googleLoginEnabled() };
 };
 
 export const actions: Actions = {

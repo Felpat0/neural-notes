@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { onDestroy, onMount, untrack } from 'svelte';
-	import { beforeNavigate, invalidate } from '$app/navigation';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Editor, type JSONContent } from '@tiptap/core';
 	import StarterKit from '@tiptap/starter-kit';
 	import Highlight from '@tiptap/extension-highlight';
 	import { Placeholder } from '@tiptap/extensions';
 	import { ChecklistEmbed } from '#lib/editor/checklist-embed.ts';
-	import { todoApi } from '#lib/todo-api.ts';
+	import { isCached } from '#lib/offline-pages.ts';
+	import { newId, outbox, type NoteVersion } from '#lib/outbox.svelte.ts';
 	import {
 		Bell,
 		CalendarDays,
@@ -36,7 +37,8 @@
 		day: string | null;
 		tags: string[];
 		pinned: boolean;
-		updatedAt: Date | string;
+		/** null: nota appena creata sul dispositivo (non ancora sul server) */
+		updatedAt: Date | string | null;
 	};
 	type Patch = Partial<{
 		title: string;
@@ -46,7 +48,7 @@
 		tags: string[];
 		pinned: boolean;
 	}>;
-	type Conflict = Omit<Note, 'id'> & { text: string };
+	type Conflict = NoteVersion;
 
 	let {
 		note,
@@ -58,110 +60,114 @@
 		/** prossimo promemoria, "AAAA-MM-GGTHH:MM" nel fuso dell'utente */
 		reminder: string | null;
 	} = $props();
-	// l'editor parte dalla versione caricata; da lì in poi lo stato è locale
+	// l'editor parte dalla versione caricata, con sopra le modifiche ancora in coda (fatte offline:
+	// la pagina può venire dalla cache); da lì in poi lo stato è locale
 	const initial = untrack(() => note);
+	const queuedAtStart = untrack(() => outbox.note(initial.id));
+	function start<K extends keyof Patch & keyof Note>(key: K): Note[K] {
+		const patch = queuedAtStart?.patch as Partial<Note> | undefined;
+		return patch && key in patch ? (patch[key] as Note[K]) : initial[key];
+	}
 	const iso = (d: Date | string) => new Date(d).toISOString();
 
-	let title = $state(initial.title);
-	let day = $state(initial.day);
-	let tags = $state(initial.tags);
-	let pinned = $state(initial.pinned);
+	let title = $state(start('title'));
+	let day = $state(start('day'));
+	let tags = $state(start('tags'));
+	let pinned = $state(start('pinned'));
 	let tagInput = $state('');
 
 	// --- Salvataggio automatico ---
+	// Le modifiche vanno nella coda offline (outbox), salvata sul dispositivo, che le invia appena
+	// può: chiudere l'app o perdere la rete non le perde. Il conflitto (nota salvata altrove nel
+	// frattempo) arriva dalla coda e si risolve qui.
 
 	const SAVE_DELAY = 800;
-	let status = $state<'saved' | 'pending' | 'saving' | 'error' | 'conflict'>('saved');
-	let conflict = $state<Conflict | null>(null);
+	const queued = $derived(outbox.note(initial.id));
+	const conflict = $derived<Conflict | null>(queued?.conflict ?? null);
+	let typing = $state(false);
+	const status = $derived(
+		conflict
+			? 'conflict'
+			: queued?.error
+				? 'error'
+				: typing
+					? 'pending'
+					: queued
+						? outbox.online
+							? 'saving'
+							: 'offline'
+						: 'saved'
+	);
 	let pending: Patch = {};
-	let base = iso(initial.updatedAt);
+	// versione di riferimento (null: nota creata sul dispositivo, nessun controllo)
+	let base: string | null = initial.updatedAt ? iso(initial.updatedAt) : null;
 	let timer: ReturnType<typeof setTimeout> | undefined;
-	let inflight: Promise<void> | null = null;
-	let listTimer: ReturnType<typeof setTimeout> | undefined;
-
-	const hasPending = () => Object.keys(pending).length > 0;
 
 	function change(patch: Patch, delay = SAVE_DELAY) {
 		pending = { ...pending, ...patch };
-		if (status !== 'conflict') status = 'pending';
+		typing = true;
 		clearTimeout(timer);
-		timer = setTimeout(() => flush(), delay);
+		timer = setTimeout(persist, delay);
 	}
 
-	/** Invia le modifiche in sospeso; `keepalive` quando si sta lasciando la pagina. */
-	async function flush(force = false, keepalive = false) {
+	/** Passa le modifiche alla coda (che le salva sul dispositivo e le invia). */
+	function persist() {
 		clearTimeout(timer);
-		if (inflight) await inflight;
-		if (!hasPending() || (status === 'conflict' && !force)) return;
-		const sent = pending;
+		typing = false;
+		if (!Object.keys(pending).length) return;
+		outbox.saveNote(initial.id, pending, base);
 		pending = {};
-		status = 'saving';
-		inflight = (async () => {
-			try {
-				const res = await fetch(`/api/notes/${initial.id}`, {
-					method: 'PATCH',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ ...sent, base, force }),
-					keepalive
-				});
-				if (res.status === 409) {
-					conflict = (await res.json()).conflict;
-					pending = { ...sent, ...pending };
-					status = 'conflict';
-					return;
-				}
-				if (!res.ok) throw new Error(String(res.status));
-				const saved = (await res.json()) as { updatedAt: string; tags?: string[] };
-				base = iso(saved.updatedAt);
-				if (saved.tags && !pending.tags) tags = saved.tags;
-				status = hasPending() ? 'pending' : 'saved';
-				if (hasPending()) timer = setTimeout(() => flush(), SAVE_DELAY);
-				// l'elenco (titolo, anteprima, gruppi) si aggiorna poco dopo
-				clearTimeout(listTimer);
-				listTimer = setTimeout(() => invalidate('app:notes'), 1500);
-			} catch {
-				pending = { ...sent, ...pending };
-				status = 'error';
-			}
-		})();
-		await inflight;
-		inflight = null;
 	}
+
+	// salvate sul server: la nuova versione è il riferimento per le prossime modifiche
+	const stopListening = outbox.onNoteSaved((event) => {
+		if (event.noteId !== initial.id) return;
+		base = iso(event.updatedAt);
+		// tag come li ha salvati il server, se nel frattempo non sono cambiati qui
+		if (event.tags && !pending.tags && !outbox.note(initial.id)?.patch.tags) tags = event.tags;
+	});
 
 	/** Conflitto: tiene la versione salvata dall'altro dispositivo. */
 	function useTheirs() {
 		if (!conflict) return;
-		applying = true;
-		editor?.commands.setContent((conflict.content as JSONContent) ?? '');
-		applying = false;
-		title = conflict.title;
-		day = conflict.day;
-		tags = conflict.tags;
-		pinned = conflict.pinned;
-		base = iso(conflict.updatedAt);
+		const theirs = conflict;
+		clearTimeout(timer);
 		pending = {};
-		conflict = null;
-		status = 'saved';
+		typing = false;
+		applying = true;
+		editor?.commands.setContent((theirs.content as JSONContent) ?? '');
+		applying = false;
+		title = theirs.title;
+		day = theirs.day;
+		tags = theirs.tags;
+		pinned = theirs.pinned;
+		base = iso(theirs.updatedAt);
+		outbox.resolveConflict(initial.id, null);
 	}
 
 	/** Conflitto: sovrascrive con questa versione. */
 	function keepMine() {
 		if (!editor) return;
-		pending = { title, day, tags, pinned, content: editor.getJSON(), text: plainText(editor) };
-		conflict = null;
-		status = 'pending';
-		flush(true);
+		clearTimeout(timer);
+		pending = {};
+		typing = false;
+		outbox.resolveConflict(initial.id, {
+			title,
+			day,
+			tags,
+			pinned,
+			content: editor.getJSON(),
+			text: plainText(editor)
+		});
 	}
 
-	beforeNavigate(() => {
-		if (hasPending()) flush(false, true);
-	});
+	beforeNavigate(persist);
 	function onVisibility() {
-		if (document.visibilityState === 'hidden' && hasPending()) flush(false, true);
+		if (document.visibilityState === 'hidden') persist();
 	}
 	function onBeforeUnload(event: BeforeUnloadEvent) {
-		if (hasPending() || status === 'saving') {
-			flush(false, true);
+		if (typing) {
+			persist();
 			event.preventDefault();
 		}
 	}
@@ -194,7 +200,7 @@
 				Placeholder.configure({ placeholder: 'Scrivi qui…' }),
 				ChecklistEmbed.configure({ today })
 			],
-			content: (initial.content as JSONContent) ?? '',
+			content: (start('content') as JSONContent) ?? '',
 			editorProps: {
 				attributes: {
 					class: 'note-body min-h-[40vh] pb-8',
@@ -207,12 +213,12 @@
 			}
 		});
 		// nota nuova: si comincia dal titolo
-		if (!initial.title && editor.isEmpty) titleEl.focus();
+		if (!title && editor.isEmpty) titleEl.focus();
 	});
 
 	onDestroy(() => {
-		if (hasPending()) flush(false, true);
-		clearTimeout(listTimer);
+		persist();
+		stopListening();
 		editor?.destroy();
 	});
 
@@ -302,28 +308,25 @@
 
 	// --- Checklist ---
 
-	let creatingChecklist = false;
-	/** Crea una checklist della nota e la inserisce dove c'è il cursore. */
-	async function insertChecklist() {
-		if (!editor || creatingChecklist) return;
-		creatingChecklist = true;
-		try {
-			const { checklistId } = await todoApi<{ checklistId: string }>('createChecklist', {
-				noteId: initial.id
-			});
-			editor.chain().focus().insertChecklist(checklistId).run();
-		} catch {
-			status = 'error';
-		} finally {
-			creatingChecklist = false;
-		}
+	/** Crea una checklist della nota (id scelto qui, va bene anche offline) e la inserisce. */
+	function insertChecklist() {
+		if (!editor) return;
+		const checklistId = newId();
+		void outbox.todo({ op: 'createChecklist', noteId: initial.id, id: checklistId });
+		editor.chain().focus().insertChecklist(checklistId).run();
 	}
 
 	// --- Giorno, tag, fissata ---
 
 	// --- Promemoria (non fa parte del salvataggio automatico: ha la sua rotta) ---
 
-	let reminder = $state(untrack(() => initialReminder));
+	// quello ancora in coda, se c'è, è il più recente
+	let reminder = $state(
+		untrack(() => {
+			const queuedReminder = outbox.reminder(initial.id);
+			return queuedReminder ? queuedReminder.at : initialReminder;
+		})
+	);
 	const reminderLabel = (at: string) => {
 		const day = at.slice(0, 10);
 		const time = at.slice(11, 16);
@@ -331,20 +334,28 @@
 			? time
 			: `${weekdayShort(day)} ${dayNumber(day)} ${monthShort(day)} · ${time}`;
 	};
-	async function setReminder(at: string | null) {
-		const old = reminder;
+	function setReminder(at: string | null) {
 		reminder = at;
-		try {
-			const res = await fetch(`/api/notes/${initial.id}/reminder`, {
-				method: 'PUT',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ at })
-			});
-			if (!res.ok) throw new Error(String(res.status));
-		} catch {
-			reminder = old;
-			status = 'error';
-		}
+		outbox.setReminder(initial.id, at);
+	}
+
+	// --- Eliminazione (nel cestino; anche offline, parte con la coda) ---
+
+	let deleting = $state(false);
+	async function deleteNote(event: SubmitEvent) {
+		event.preventDefault();
+		if (deleting) return;
+		deleting = true;
+		clearTimeout(timer);
+		pending = {};
+		typing = false;
+		const sent = outbox.deleteNote(initial.id);
+		// con la rete si aspetta il server, per poter offrire "Annulla" nell'elenco
+		const outcome = navigator.onLine
+			? await Promise.race([sent, new Promise<null>((r) => setTimeout(() => r(null), 4000))])
+			: null;
+		if (outcome?.ok) await goto(`/note?eliminata=${initial.id}`, { invalidateAll: true });
+		else await goto((await isCached('/note')) ? '/note' : '/');
 	}
 
 	function setDay(value: string | null) {
@@ -396,8 +407,12 @@
 				<span class="text-neon">■ Salvata</span>
 			{:else if status === 'saving' || status === 'pending'}
 				<span class="text-dim">Salvataggio…</span>
+			{:else if status === 'offline'}
+				<span class="text-soft">■ Sul dispositivo · in coda</span>
 			{:else if status === 'error'}
-				<button class="text-alert underline" onclick={() => flush()}>Non salvata · Riprova</button>
+				<button class="text-alert underline" onclick={() => outbox.retryNote(initial.id)}>
+					Non salvata{queued?.error ? `: ${queued.error}` : ''} · Riprova
+				</button>
 			{:else}
 				<span class="text-alert">Conflitto</span>
 			{/if}
@@ -425,8 +440,12 @@
 					aria-hidden="true"
 				/>{/if}
 		</button>
-		<form method="POST" action="?/delete">
-			<button class="flex size-11 items-center justify-center text-alert" aria-label="Elimina nota">
+		<form method="POST" action="?/delete" data-offline onsubmit={deleteNote}>
+			<button
+				class="flex size-11 items-center justify-center text-alert"
+				aria-label="Elimina nota"
+				disabled={deleting}
+			>
 				<Trash2 size={20} aria-hidden="true" />
 			</button>
 		</form>

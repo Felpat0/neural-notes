@@ -9,12 +9,13 @@ import {
 	startSession,
 	tooManyAttempts
 } from '#lib/server/auth.ts';
+import { googleLoginEnabled } from '#lib/server/google/client.ts';
 import { verifyPassword } from '#lib/server/password.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, url }) => {
 	if (locals.user) redirect(303, safeNext(url.searchParams.get('next')));
-	return { signupOpen: signupOpen() };
+	return { signupOpen: signupOpen(), googleEnabled: googleLoginEnabled() };
 };
 
 export const actions: Actions = {

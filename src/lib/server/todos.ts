@@ -177,6 +177,8 @@ export async function createTodos(
 		day?: string;
 		checklistId?: string;
 		texts: string[];
+		/** id scelti dal client, uno per testo: ripetere la richiesta non crea doppioni */
+		ids?: string[];
 		time?: string | null;
 		repeat?: Repeat | null;
 	},
@@ -193,9 +195,19 @@ export async function createTodos(
 		checklistId = await dayChecklistId(user.id, day);
 	}
 
+	// richiesta ripetuta (risposta persa per strada): i todo che esistono già non si ricreano
+	const existing = new Set(
+		input.ids?.length
+			? (await db.select({ id: s.todo.id }).from(s.todo).where(inArray(s.todo.id, input.ids))).map(
+					(r) => r.id
+				)
+			: []
+	);
 	const ids: string[] = [];
-	for (const text of input.texts) {
-		const id = randomUUID();
+	for (const [i, text] of input.texts.entries()) {
+		const id = input.ids?.[i] ?? randomUUID();
+		ids.push(id);
+		if (existing.has(id)) continue;
 		let ruleId: string | null = null;
 		if (input.repeat) {
 			ruleId = randomUUID();
@@ -210,7 +222,6 @@ export async function createTodos(
 		}
 		await db.insert(s.todo).values({ id, checklistId, text, ruleId });
 		if (input.time) await setReminder(user, id, text, day, input.time);
-		ids.push(id);
 	}
 	const items = await itemsOf(user, [checklistId], ids);
 	return { day, checklistId, items: items.map((r) => r.item) };
@@ -241,11 +252,15 @@ export async function toggleTodo(user: User, id: string, done: boolean) {
 
 /**
  * Sposta in un altro giorno (in fondo alla lista). Un'occorrenza di un ricorrente diventa un todo
- * normale nel giorno nuovo; al suo posto resta un segnaposto eliminato, perché non venga ricreata.
+ * normale nel giorno nuovo (con `newId`, se il client l'ha scelto); al suo posto resta un
+ * segnaposto eliminato, perché non venga ricreata.
  */
-export async function moveTodo(user: User, id: string, day: string) {
+export async function moveTodo(user: User, id: string, day: string, newId?: string) {
 	const own = await ownTodo(user.id, id);
 	if (!own) return null;
+	// richiesta ripetuta: l'occorrenza è già stata spostata con l'id scelto dal client
+	if (own.todo.ruleId && newId && newId !== id && (await ownTodo(user.id, newId)))
+		return { day, item: await todoItem(user, newId) };
 	const target = await dayChecklistId(user.id, day);
 	const [reminder] = await db
 		.select({ fireAt: s.reminder.fireAt })
@@ -255,7 +270,7 @@ export async function moveTodo(user: User, id: string, day: string) {
 
 	let movedId = id;
 	if (own.todo.ruleId) {
-		movedId = randomUUID();
+		movedId = newId && newId !== id ? newId : randomUUID();
 		await db.insert(s.todo).values({ id: movedId, checklistId: target, text: own.todo.text });
 		await db.update(s.todo).set({ deletedAt: new Date() }).where(eq(s.todo.id, id));
 		await db.delete(s.reminder).where(and(eq(s.reminder.todoId, id), isNull(s.reminder.sentAt)));
@@ -383,21 +398,25 @@ export async function checklistItems(user: User, checklistIds: string[]) {
 }
 
 /** Nuova checklist dentro una nota (null se la nota non è dell'utente). */
-export async function createNoteChecklist(user: User, noteId: string) {
+export async function createNoteChecklist(user: User, noteId: string, wantedId?: string) {
 	const [note] = await db
 		.select({ id: s.note.id })
 		.from(s.note)
 		.where(and(eq(s.note.id, noteId), eq(s.note.userId, user.id), isNull(s.note.deletedAt)));
 	if (!note) return null;
-	const id = randomUUID();
-	await db.insert(s.checklist).values({ id, userId: user.id, kind: 'note', noteId });
-	return id;
+	const id = wantedId ?? randomUUID();
+	await db
+		.insert(s.checklist)
+		.values({ id, userId: user.id, kind: 'note', noteId })
+		.onConflictDoNothing();
+	// con un id del client che esiste già va bene solo se è la sua (richiesta ripetuta)
+	return wantedId && !(await ownChecklist(user.id, id)) ? null : id;
 }
 
 /** Todo non fatti dei giorni passati (ultimi 30 giorni), dal più vecchio. */
 export async function overdueTodos(user: User, today: string, since: string) {
 	const rows = await db
-		.select({ id: s.todo.id, text: s.todo.text, day: s.checklist.day })
+		.select({ id: s.todo.id, text: s.todo.text, ruleId: s.todo.ruleId, day: s.checklist.day })
 		.from(s.todo)
 		.innerJoin(s.checklist, eq(s.todo.checklistId, s.checklist.id))
 		.where(
@@ -411,7 +430,7 @@ export async function overdueTodos(user: User, today: string, since: string) {
 			)
 		)
 		.orderBy(asc(s.checklist.day), asc(s.todo.position));
-	return rows.map((r) => ({ id: r.id, text: r.text, day: r.day! }));
+	return rows.map((r) => ({ id: r.id, text: r.text, ruleId: r.ruleId, day: r.day! }));
 }
 
 /** Giorni (tra `from` e `to`) con todo da fare o note assegnate, per i segni sul calendario. */

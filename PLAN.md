@@ -355,7 +355,7 @@ Salvataggio dell'editor: debounce di 800 ms verso una form action (`?/save`) con
 8. **PWA e foldable** — manifest e icone, service worker offline (lettura), segmenti dello schermo, rifinitura tastiera e safe area, test su Galaxy Fold/Pixel Fold (o emulatore Chrome DevTools "Dual screen"), tablet.
 9. **Deploy** — progetto Neon (branch `main` + `dev`), variabili su Vercel, `db:migrate` in produzione, cron attivi (notify ogni minuto, google ogni 15 minuti).
 
-Più avanti: modifica offline con coda in IndexedDB, condivisione di note in sola lettura, allegati immagine (Vercel Blob), widget "Oggi" via Web App Shortcuts.
+Più avanti: condivisione di note in sola lettura, allegati immagine (Vercel Blob), widget "Oggi" via Web App Shortcuts.
 
 ## Variabili d'ambiente
 

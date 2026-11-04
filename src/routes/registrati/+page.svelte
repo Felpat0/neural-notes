@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import AuthShell from '#lib/components/AuthShell.svelte';
+	import GoogleButton from '#lib/components/GoogleButton.svelte';
 	import PasswordField from '#lib/components/PasswordField.svelte';
 	import type { PageProps } from './$types';
 
@@ -80,6 +81,8 @@
 				Ti mandiamo un'email per confermare l'indirizzo. Puoi usare l'app subito.
 			</span>
 		</form>
+		<!-- con il codice d'invito la registrazione passa solo da questo modulo -->
+		{#if data.googleEnabled && !data.needsCode}<GoogleButton />{/if}
 		<p class="text-center text-[15px] text-soft">
 			Hai già un account? <a href="/login" class="btn-link">Accedi</a>
 		</p>

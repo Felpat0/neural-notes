@@ -72,11 +72,13 @@ export function checkSignupCode(input: string) {
 
 // --- Utenti ---
 
+/** Nuovo account; con `googleSub` (accesso con Google) senza password e con l'email già confermata. */
 export async function createUser(input: {
 	name: string;
 	email: string;
-	password: string;
+	password: string | null;
 	timezone?: string;
+	googleSub?: string;
 }) {
 	const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(s.user);
 	const [row] = await db
@@ -85,7 +87,9 @@ export async function createUser(input: {
 			id: randomUUID(),
 			name: input.name.trim(),
 			email: normalizeEmail(input.email),
-			passwordHash: await hashPassword(input.password),
+			passwordHash: input.password ? await hashPassword(input.password) : null,
+			googleSub: input.googleSub ?? null,
+			emailVerifiedAt: input.googleSub ? new Date() : null,
 			timezone: input.timezone && validTimezone(input.timezone) ? input.timezone : 'Europe/Rome',
 			// il primo account gestisce le impostazioni globali
 			isAdmin: n === 0
@@ -100,6 +104,11 @@ export async function findUserByEmail(email: string) {
 		.select()
 		.from(s.user)
 		.where(eq(s.user.email, normalizeEmail(email)));
+	return row ?? null;
+}
+
+export async function findUserByGoogleSub(sub: string) {
+	const [row] = await db.select().from(s.user).where(eq(s.user.googleSub, sub));
 	return row ?? null;
 }
 

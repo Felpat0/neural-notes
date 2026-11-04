@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Plus, Search, X } from '@lucide/svelte';
+	import DraftNotes from '#lib/components/DraftNotes.svelte';
 	import NoteGroups from '#lib/components/NoteGroups.svelte';
+	import { newNote } from '#lib/new-note.ts';
 	import type { NoteGroup } from '#lib/notes.ts';
 	import { editQuery } from '#lib/url.ts';
 
@@ -35,7 +37,7 @@
 <div class="flex flex-col gap-3">
 	<div class="flex items-center justify-between gap-2">
 		<h1 class="text-[32px] leading-none font-bold text-volt uppercase">Note</h1>
-		<form method="POST" action="/note?/create">
+		<form method="POST" action="/note?/create" data-offline onsubmit={newNote()}>
 			<button class="btn-primary size-11 min-h-0 p-0" aria-label="Nuova nota">
 				<Plus size={22} strokeWidth={3} aria-hidden="true" />
 			</button>
@@ -102,6 +104,8 @@
 			{/if}
 		</p>
 	{/if}
+
+	<DraftNotes />
 
 	<NoteGroups
 		{groups}

@@ -4,11 +4,25 @@
 	import NoteGroups from '#lib/components/NoteGroups.svelte';
 	import OverdueList from '#lib/components/OverdueList.svelte';
 	import TodoList from '#lib/components/TodoList.svelte';
+	import DraftNotes from '#lib/components/DraftNotes.svelte';
 	import { addDays, dayNumber, monthShort, weekdayName, weekdayShort } from '#lib/format.ts';
+	import { onMount } from 'svelte';
+	import { newNote } from '#lib/new-note.ts';
+	import { warmPages } from '#lib/offline-pages.ts';
+	import { outbox } from '#lib/outbox.svelte.ts';
 	import { editQuery } from '#lib/url.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
+	// note eliminate offline (eliminazione ancora in coda): non si mostrano
+	const cards = $derived(data.cards.filter((c) => !outbox.isDeleted(c.id)));
+
+	// le note del giorno e le più recenti si salvano sul dispositivo: si aprono anche offline
+	onMount(() => {
+		const recent = data.groups.flatMap((g) => g.notes).slice(0, 10);
+		warmPages([...data.cards, ...recent].map((n) => `/note/${n.id}`));
+	});
 
 	const dayHref = (day: string) => (day === data.today ? '/' : `/?giorno=${day}`);
 	const moreQuery = $derived(
@@ -119,12 +133,12 @@
 				<h2 id="day-notes" class="flex-1 lbl text-[13px] font-bold text-neon">
 					{data.day === data.today ? 'Note di oggi' : 'Note del giorno'}
 				</h2>
-				<form method="POST" action="/note?/create">
+				<form method="POST" action="/note?/create" data-offline onsubmit={newNote(data.day)}>
 					<input type="hidden" name="day" value={data.day} />
 					<button class="btn-link lbl text-[11px]">+ Nota per questo giorno</button>
 				</form>
 			</div>
-			{#each data.cards as note (note.id)}
+			{#each cards as note (note.id)}
 				<NoteCard {note} today={data.today} />
 			{:else}
 				<p class="border border-line px-3.5 py-3 text-sm text-dim">
@@ -133,6 +147,49 @@
 			{/each}
 		</section>
 
+		{#if data.agenda}
+			<section aria-labelledby="agenda-title" class="flex flex-col gap-3">
+				<div class="flex items-center gap-2.5">
+					<span aria-hidden="true" class="h-0.5 w-3 bg-neon"></span>
+					<h2 id="agenda-title" class="flex-1 lbl text-[13px] font-bold text-neon">Agenda</h2>
+					<a href="/profilo#gc-title" class="btn-link lbl text-[11px]">Calendari ›</a>
+				</div>
+				{#if data.agenda.length}
+					<ul class="flex flex-col border border-line">
+						{#each data.agenda as event (event.key)}
+							<li class="border-b border-line last:border-0">
+								<a
+									href={event.href ?? undefined}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="flex min-h-12 items-center gap-3 px-3.5 py-2 hover:bg-line/40"
+								>
+									<span
+										class="w-1 self-stretch"
+										style:background={event.color ?? 'var(--color-soft)'}
+										aria-hidden="true"
+									></span>
+									<span class="w-24 shrink-0 text-[13px] font-semibold text-soft tabular-nums">
+										{event.time ?? 'Tutto il giorno'}
+									</span>
+									<span class="flex min-w-0 flex-1 flex-col">
+										<span class="truncate font-semibold">{event.title}</span>
+										{#if event.location}
+											<span class="truncate text-[13px] text-dim">{event.location}</span>
+										{/if}
+									</span>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="border border-line px-3.5 py-3 text-sm text-dim">
+						Nessun evento in calendario.
+					</p>
+				{/if}
+			</section>
+		{/if}
+
 		<section aria-labelledby="notes-title" class="flex flex-col gap-3">
 			<div class="flex items-baseline justify-between">
 				<h2 id="notes-title" class="text-[34px] leading-none font-bold text-volt uppercase">
@@ -140,6 +197,7 @@
 				</h2>
 				<a href="/cerca" class="btn-link lbl text-[11px]">Cerca ›</a>
 			</div>
+			<DraftNotes />
 			{#if data.groups.length}
 				<NoteGroups
 					groups={data.groups}
@@ -156,6 +214,8 @@
 <form
 	method="POST"
 	action="/note?/create"
+	data-offline
+	onsubmit={newNote()}
 	class="fixed right-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-20 md:right-6 md:bottom-6"
 >
 	<button class="btn-primary size-15 p-0" aria-label="Nuova nota">

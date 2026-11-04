@@ -2,6 +2,7 @@
 	import { Pin } from '@lucide/svelte';
 	import { dayNumber, monthShort, weekdayShort } from '#lib/format.ts';
 	import { noteStamp, type NoteGroup } from '#lib/notes.ts';
+	import { outbox } from '#lib/outbox.svelte.ts';
 
 	// Note raggruppate per periodo (fascia gialla per gruppo), nell'elenco delle note e nella home.
 	let {
@@ -21,9 +22,17 @@
 		/** fasce ferme in cima mentre si scorre (elenco a pannello) */
 		sticky?: boolean;
 	} = $props();
+
+	// le note eliminate con la coda offline ancora da inviare non si mostrano (i dati possono
+	// venire dalla cache)
+	const visible = $derived(
+		groups
+			.map((g) => ({ ...g, notes: g.notes.filter((n) => !outbox.isDeleted(n.id)) }))
+			.filter((g) => g.notes.length)
+	);
 </script>
 
-{#each groups as group (group.key)}
+{#each visible as group (group.key)}
 	<section aria-labelledby="g-{group.key}" class="flex flex-col gap-2">
 		<h2 id="g-{group.key}" class="sep {sticky ? 'sticky top-0 z-10' : ''}">
 			{group.label} <span class="text-[11px]">{group.notes.length}</span>

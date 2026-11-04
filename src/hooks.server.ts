@@ -2,9 +2,12 @@ import { error, redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit/hooks';
 import { SESSION_COOKIE, readSession } from '#lib/server/auth.ts';
 
-// Pagine dell'account che funzionano senza essere entrati; /api/cron/ ha un segreto suo.
+// Pagine dell'account che funzionano senza essere entrati; /api/cron/ ha un segreto suo, il
+// webhook di Google il token del canale.
 const PUBLIC_PATHS = [
 	'/api/cron/',
+	'/api/google/webhook',
+	'/auth/google',
 	'/login',
 	'/registrati',
 	'/password-dimenticata',

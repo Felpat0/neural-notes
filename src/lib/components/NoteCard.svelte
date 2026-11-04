@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { ListChecks, Pin } from '@lucide/svelte';
 	import TodoList from '#lib/components/TodoList.svelte';
 	import { dayNumber } from '#lib/format.ts';
+	import { outbox } from '#lib/outbox.svelte.ts';
 	import type { TodoItem } from '#lib/todo-api.ts';
 
 	// Nota assegnata al giorno, nella home: titolo, inizio del testo e le sue checklist,
@@ -22,6 +24,13 @@
 		};
 		today: string;
 	} = $props();
+
+	// copia sul dispositivo delle checklist: aprendo la nota senza rete si vedono lo stesso
+	onMount(() => {
+		if (navigator.onLine)
+			for (const checklist of note.checklists)
+				void outbox.saveChecklist(checklist.id, checklist.items);
+	});
 </script>
 
 <article class="frame-neon flex flex-col gap-1.5 px-3.5 pt-4 pb-2" aria-labelledby="card-{note.id}">

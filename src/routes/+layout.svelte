@@ -7,9 +7,21 @@
 	import favicon from '#lib/assets/favicon.svg';
 	import { page } from '$app/state';
 	import { CalendarDays, FileText, House, Search, Settings } from '@lucide/svelte';
+	import { onMount } from 'svelte';
+	import SyncStatus from '#lib/components/SyncStatus.svelte';
+	import { warmPages } from '#lib/offline-pages.ts';
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
+
+	// pagine principali salvate sul dispositivo per l'uso offline (il service worker le aggiorna
+	// se sono vecchie)
+	onMount(() => {
+		if (data.user) warmPages(['/', '/note', '/calendario', '/ricorrenti']);
+	});
+
+	// editor di una nota (anche di una creata offline, /bozza/<id>)
+	const editing = $derived(page.route.id === '/note/[id]' || page.route.id === '/bozza/[id]');
 
 	const NAV = [
 		{ href: '/', label: 'Oggi', icon: House, match: (p: string) => p === '/' },
@@ -37,8 +49,8 @@
 {#if data.user}
 	<div
 		class="contents"
-		data-focus={page.route.id === '/note/[id]' ? '' : undefined}
-		data-full={page.route.id === '/note/[id]' && page.url.searchParams.has('full') ? '' : undefined}
+		data-focus={editing ? '' : undefined}
+		data-full={editing && page.url.searchParams.has('full') ? '' : undefined}
 	>
 		<nav class="app-nav" aria-label="Navigazione principale">
 			<span class="app-nav-brand" aria-hidden="true">N//</span>
@@ -63,6 +75,7 @@
 			{@render children()}
 		</main>
 	</div>
+	<SyncStatus />
 {:else}
 	{@render children()}
 {/if}

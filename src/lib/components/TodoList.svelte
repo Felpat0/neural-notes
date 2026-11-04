@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, tick, untrack } from 'svelte';
+	import { onDestroy, onMount, tick, untrack } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import {
 		CalendarDays,
@@ -14,9 +14,11 @@
 	import { addDays, dayNumber, monthShort, weekdayShort } from '#lib/format.ts';
 	import { quickParse, type Token } from '#lib/quick-parse.ts';
 	import { repeatLabel, repeatOptions, type Repeat } from '#lib/repeat.ts';
-	import { MAX_TODO_LENGTH, todoApi, type TodoItem } from '#lib/todo-api.ts';
+	import { MAX_TODO_LENGTH, type TodoItem } from '#lib/todo-api.ts';
+	import { LOCAL_RULE, applyTodoOps, isRecurring, type TodoOp } from '#lib/outbox-ops.ts';
+	import { newId, outbox } from '#lib/outbox.svelte.ts';
 
-	type Row = TodoItem & { pending?: boolean };
+	type Row = TodoItem;
 
 	let {
 		items,
@@ -49,8 +51,36 @@
 
 	const find = (id: string | null) => list.find((r) => r.id === id);
 	const indexOf = (id: string) => list.findIndex((r) => r.id === id);
-	// niente crypto.randomUUID: non c'è su http da un altro dispositivo della rete
-	const tempId = () => `tmp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+
+	// --- Coda offline ---
+	// Le modifiche partono dalla coda (outbox): subito con la rete, più tardi senza. I dati della
+	// pagina possono venire dalla cache, quindi le operazioni in coda si rimettono sopra; lo stesso
+	// per quelle aggiunte dopo da altre parti della pagina (es. "Porta a oggi" dai todo in sospeso).
+	// Riapplicare un'operazione già vista non cambia nulla.
+	const where = untrack(() => ({ checklistId, day: variant === 'day' ? day : null }));
+	let seen = 0;
+	let mounted = $state(false);
+	onMount(() => (mounted = true));
+	$effect(() => {
+		if (!mounted) return;
+		const fresh = outbox.entries.filter((e) => e.kind === 'todo' && e.seq > seen);
+		if (!fresh.length) return;
+		seen = Math.max(...fresh.map((e) => e.seq));
+		const ops = fresh.flatMap((e) => (e.kind === 'todo' ? [e.body] : []));
+		untrack(() => (list = applyTodoOps(list, ops, where)));
+	});
+
+	/** Mette in coda e, quando il server risponde, prende i dati come li ha salvati lui. */
+	function send(op: TodoOp) {
+		void outbox.todo(op).then((outcome) => {
+			if (!outcome.ok || !outcome.data) return;
+			const data = outcome.data as { item?: TodoItem | null; items?: TodoItem[] };
+			for (const item of data.items ?? (data.item ? [data.item] : [])) {
+				const row = find(item.id);
+				if (row) Object.assign(row, item);
+			}
+		});
+	}
 
 	function dayLabel(d: string) {
 		if (d === today) return 'oggi';
@@ -77,7 +107,6 @@
 			showToast('Annullamento non riuscito');
 		}
 	}
-	const failed = (e: unknown) => showToast(`Non salvato: ${(e as Error).message}`);
 	onDestroy(() => clearTimeout(toastTimer));
 
 	// --- Aggiunta (con riconoscimento di giorno, ora e ripetizione) ---
@@ -97,12 +126,11 @@
 		draft = '';
 		off = [];
 		input.focus();
-		const ok = await add([p.text], {
+		add([p.text], {
 			day: canMove ? p.day : null,
 			time: p.time,
 			repeat: canMove ? p.repeat : null
 		});
-		if (!ok && !draft) draft = raw;
 	}
 
 	/** Più righe incollate: un todo per riga, senza riconoscimento. */
@@ -117,56 +145,41 @@
 		add(lines.slice(0, 50), {});
 	}
 
-	async function add(
+	function add(
 		texts: string[],
 		opts: { day?: string | null; time?: string | null; repeat?: Repeat | null }
 	) {
 		const elsewhere = !!opts.day && opts.day !== day;
-		const temps: Row[] = elsewhere
-			? []
-			: texts.map((text) => ({
-					id: tempId(),
+		const ids = texts.map(() => newId());
+		const time = opts.time ?? null;
+		const repeat = opts.repeat ?? null;
+		if (!elsewhere)
+			list.push(
+				...texts.map((text, i) => ({
+					id: ids[i],
 					text,
 					done: false,
-					ruleId: null,
-					repeat: opts.repeat ?? null,
-					time: opts.time ?? null,
-					pending: true
-				}));
-		list.push(...temps);
-		try {
-			const res = await todoApi<{ day: string; items: TodoItem[] }>('create', {
-				texts,
-				time: opts.time ?? null,
-				repeat: opts.repeat ?? null,
-				...(elsewhere ? { day: opts.day } : { checklistId })
-			});
-			if (elsewhere) showToast(`Aggiunto a ${dayLabel(res.day)}`);
-			else
-				temps.forEach((temp, i) => {
-					const at = indexOf(temp.id);
-					if (at >= 0 && res.items[i]) list[at] = res.items[i];
-				});
-			return true;
-		} catch (e) {
-			list = list.filter((r) => !temps.some((t) => t.id === r.id));
-			failed(e);
-			return false;
-		}
+					ruleId: repeat ? LOCAL_RULE : null,
+					repeat,
+					time
+				}))
+			);
+		send({
+			op: 'create',
+			ids,
+			texts,
+			time,
+			repeat,
+			...(elsewhere ? { day: opts.day! } : { checklistId })
+		});
+		if (elsewhere) showToast(`Aggiunto a ${dayLabel(opts.day!)}`);
 	}
 
 	// --- Spunta, modifica, sposta, elimina ---
 
-	async function toggle(row: Row) {
-		if (row.pending) return;
-		const done = !row.done;
-		row.done = done;
-		try {
-			await todoApi('toggle', { id: row.id, done });
-		} catch (e) {
-			row.done = !done;
-			failed(e);
-		}
+	function toggle(row: Row) {
+		row.done = !row.done;
+		send({ op: 'toggle', id: row.id, done: row.done });
 	}
 
 	let editingId = $state<string | null>(null);
@@ -174,7 +187,6 @@
 	let editInput = $state<HTMLInputElement>();
 
 	async function startEdit(row: Row) {
-		if (row.pending) return;
 		editingId = row.id;
 		editText = row.text;
 		close();
@@ -182,80 +194,60 @@
 		editInput?.focus();
 	}
 
-	async function saveEdit() {
+	function saveEdit() {
 		const row = find(editingId);
 		editingId = null;
 		if (!row) return;
 		const text = editText.replace(/\s+/g, ' ').trim();
 		if (!text) return remove(row);
 		if (text === row.text) return;
-		const old = row.text;
 		row.text = text;
-		try {
-			const { item } = await todoApi<{ item: TodoItem }>('text', { id: row.id, text });
-			Object.assign(row, item);
-		} catch (e) {
-			row.text = old;
-			failed(e);
-		}
+		send({ op: 'text', id: row.id, text });
 	}
 
-	async function move(row: Row, toDay: string) {
+	function move(row: Row, toDay: string) {
 		if (toDay === day) return;
 		const at = indexOf(row.id);
+		if (at < 0) return;
+		const item = $state.snapshot(row);
 		list.splice(at, 1);
 		editingId = null;
 		close();
-		try {
-			const res = await todoApi<{ item: TodoItem }>('move', { id: row.id, day: toDay });
-			showToast(`Spostato a ${dayLabel(toDay)}`, async () => {
-				const back = await todoApi<{ item: TodoItem }>('move', { id: res.item.id, day });
-				list.splice(Math.min(at, list.length), 0, back.item);
-			});
-		} catch (e) {
-			list.splice(at, 0, row);
-			failed(e);
-		}
+		// un ricorrente spostato diventa un todo nuovo: l'id lo sceglie già qui
+		const movedId = isRecurring(item) ? newId() : undefined;
+		send({ op: 'move', id: item.id, day: toDay, newId: movedId, item });
+		showToast(`Spostato a ${dayLabel(toDay)}`, async () => {
+			const back: TodoItem = movedId
+				? { ...item, id: movedId, done: false, ruleId: null, repeat: null }
+				: { ...item, done: false };
+			list.splice(Math.min(at, list.length), 0, back);
+			send({ op: 'move', id: back.id, day, item: back });
+		});
 	}
 
-	async function remove(row: Row) {
-		if (row.pending) return;
+	function remove(row: Row) {
 		const at = indexOf(row.id);
 		if (at < 0) return;
+		const item = $state.snapshot(row);
 		list.splice(at, 1);
 		editingId = null;
 		close();
-		try {
-			await todoApi('delete', { id: row.id });
-			showToast('Todo eliminato', async () => {
-				const { item } = await todoApi<{ item: TodoItem }>('restore', { id: row.id });
-				list.splice(Math.min(at, list.length), 0, item);
-			});
-		} catch (e) {
-			list.splice(at, 0, row);
-			failed(e);
-		}
+		send({ op: 'delete', id: item.id });
+		showToast('Todo eliminato', async () => {
+			list.splice(Math.min(at, list.length), 0, item);
+			send({ op: 'restore', id: item.id, checklistId, at, item });
+		});
 	}
 
-	async function setRepeat(row: Row, repeat: Repeat | null) {
-		try {
-			const { item } = await todoApi<{ item: TodoItem }>('repeat', { id: row.id, repeat });
-			Object.assign(row, item);
-		} catch (e) {
-			failed(e);
-		}
+	function setRepeat(row: Row, repeat: Repeat | null) {
+		row.repeat = repeat;
+		if (repeat && !row.ruleId) row.ruleId = LOCAL_RULE;
+		send({ op: 'repeat', id: row.id, repeat });
 	}
 
-	async function setTime(row: Row, time: string | null) {
-		const old = row.time;
+	function setTime(row: Row, time: string | null) {
 		row.time = time;
-		try {
-			const { item } = await todoApi<{ item: TodoItem }>('time', { id: row.id, time });
-			Object.assign(row, item);
-		} catch (e) {
-			row.time = old;
-			failed(e);
-		}
+		send({ op: 'time', id: row.id, time });
 	}
 
 	// --- Scorrimento a sinistra: "Domani" ed "Elimina"; fino in fondo elimina ---
@@ -279,7 +271,7 @@
 	}
 
 	function pointerDown(event: PointerEvent, row: Row) {
-		if (row.pending || editingId === row.id || event.button !== 0) return;
+		if (editingId === row.id || event.button !== 0) return;
 		if (openId && openId !== row.id) close();
 		gesture = {
 			id: row.id,
@@ -337,7 +329,6 @@
 	let dragId = $state<string | null>(null);
 
 	function dragStart(event: PointerEvent, row: Row) {
-		if (row.pending) return;
 		event.preventDefault();
 		dragId = row.id;
 		(event.currentTarget as Element).setPointerCapture(event.pointerId);
@@ -360,17 +351,10 @@
 		list = [...next, ...list.filter((r) => r.done)];
 	}
 
-	async function dragEnd() {
+	function dragEnd() {
 		if (!dragId) return;
 		dragId = null;
-		try {
-			await todoApi('reorder', {
-				checklistId,
-				ids: list.filter((r) => !r.pending).map((r) => r.id)
-			});
-		} catch (e) {
-			failed(e);
-		}
+		send({ op: 'reorder', checklistId, ids: list.map((r) => r.id) });
 	}
 
 	// --- Tastiera ---
@@ -612,7 +596,6 @@
 						onpointermove={pointerMove}
 						onpointerup={() => pointerUp(row)}
 						onpointercancel={() => pointerUp(row)}
-						class:opacity-60={row.pending}
 					>
 						<button
 							class={row.done ? 'box-on' : 'box'}

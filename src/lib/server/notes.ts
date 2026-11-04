@@ -71,19 +71,27 @@ export async function listTags(userId: string) {
 	return rows.rows.map((r) => r.tag);
 }
 
-export async function createNote(userId: string, input: { day?: string | null } = {}) {
+/** Nota nuova; con `id` scelto dal client (anche offline) ripetere la richiesta non la duplica. */
+export async function createNote(
+	userId: string,
+	input: { day?: string | null; id?: string } = {}
+): Promise<string | null> {
 	const [user] = await db
 		.select({ aiDefaultAllowed: s.user.aiDefaultAllowed })
 		.from(s.user)
 		.where(eq(s.user.id, userId));
-	const id = randomUUID();
-	await db.insert(s.note).values({
-		id,
-		userId,
-		day: input.day ?? null,
-		aiAllowed: user?.aiDefaultAllowed ?? false
-	});
-	return id;
+	const id = input.id ?? randomUUID();
+	await db
+		.insert(s.note)
+		.values({ id, userId, day: input.day ?? null, aiAllowed: user?.aiDefaultAllowed ?? false })
+		.onConflictDoNothing();
+	if (!input.id) return id;
+	// id del client che esiste già: va bene solo se la nota è sua (richiesta ripetuta)
+	const [own] = await db
+		.select({ id: s.note.id })
+		.from(s.note)
+		.where(and(eq(s.note.id, id), eq(s.note.userId, userId)));
+	return own ? id : null;
 }
 
 export async function getNote(userId: string, id: string) {

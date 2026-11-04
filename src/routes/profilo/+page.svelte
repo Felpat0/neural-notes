@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { LogOut } from '@lucide/svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import { page } from '$app/state';
+	import GoogleCalendarSettings from '#lib/components/GoogleCalendarSettings.svelte';
 	import NotificationSettings from '#lib/components/NotificationSettings.svelte';
 	import PasswordField from '#lib/components/PasswordField.svelte';
 	import { dateTime, describeAgent } from '#lib/format.ts';
@@ -57,6 +59,9 @@
 				{user.email}
 				{#if user.emailVerified}<span class="ml-auto lbl text-neon">■ Confermata</span>{/if}
 			</span>
+			{#if data.google.linked}
+				<span class="text-[13px] text-dim">Puoi accedere anche con Google.</span>
+			{/if}
 		</div>
 		<div class="flex flex-col gap-1.5">
 			<label for="pr-tz" class="lbl text-soft">Fuso orario</label>
@@ -76,6 +81,13 @@
 	</form>
 
 	<NotificationSettings />
+
+	<GoogleCalendarSettings
+		google={data.google}
+		{form}
+		result={page.url.searchParams.get('google')}
+		timezone={user.timezone}
+	/>
 
 	<form method="POST" action="?/password" class="frame flex flex-col gap-3.5 px-4 pt-5 pb-4.5">
 		<h2 class="ml-3 text-xl font-bold text-volt uppercase">

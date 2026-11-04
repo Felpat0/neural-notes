@@ -41,6 +41,25 @@ Senza un dominio proprio le email partono da un account Gmail:
 
 Il cron prende i promemoria arrivati all'ora e li invia a tutti i dispositivi dell'utente; salta i todo già fatti o eliminati e quelli in ritardo di più di 6 ore (es. dopo un'interruzione). Crea anche le occorrenze di oggi dei todo ricorrenti con un'ora, così suonano anche senza aprire l'app.
 
+## Google (accesso e Google Calendar)
+
+Su [Google Cloud Console](https://console.cloud.google.com):
+
+1. Nuovo progetto → **API e servizi → Libreria** → abilita **Google Calendar API**.
+2. **Schermata consenso OAuth** (Google Auth Platform): tipo **Esterno**, nome dell'app, email di supporto. Negli scope aggiungi `openid`, `email`, `profile`, `.../auth/calendar.app.created`, `.../auth/calendar.calendarlist.readonly`, `.../auth/calendar.events.readonly`.
+3. **Pubblica l'app** (stato _In produzione_): in _Testing_ i refresh token scadono dopo 7 giorni e il calendario si scollega. Senza la verifica di Google compare la schermata "app non verificata" (Avanzate → continua), con un limite di 100 utenti.
+4. **Client** → Crea client → _Applicazione web_. URI di reindirizzamento autorizzati: `https://<app>/auth/google/callback` (e `http://localhost:5173/auth/google/callback` per provare in locale).
+5. Su Vercel: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_TOKEN_KEY` (`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`, cifra i token nel DB: non cambiarla dopo, altrimenti va ricollegato il calendario).
+6. Su cron-job.org un secondo job **ogni 15 minuti**: GET `https://<app>/api/cron/google`, stesso header `Authorization: Bearer <CRON_SECRET>`.
+
+Con solo client ID e segreto c'è "Continua con Google" su accesso e registrazione; con anche `GOOGLE_TOKEN_KEY` compare Profilo → Google Calendar.
+
+- **Accesso con Google**: nuovo account senza password (si può impostare dal Profilo); un account esistente con la stessa email viene collegato solo se l'email è confermata. Con `SIGNUP_CODE` i nuovi account passano solo dalla registrazione con il codice.
+- **Calendario**: al collegamento l'app crea il calendario "NEURAL//NOTES" e ci mette i todo con orario (30 minuti; fatti con "✓"), i ricorrenti come serie (`RRULE`, le occorrenze eliminate o spostate come eccezioni) e le note con un giorno o un promemoria. I todo senza orario sono facoltativi. Gli eventi non hanno promemoria di Google: gli avvisi restano le notifiche dell'app.
+- **Da Google all'app**: spostare o rinominare l'evento di un todo o di una nota (o aggiungere/togliere "✓") cambia l'elemento; un evento eliminato in Google non viene ricreato finché l'elemento non cambia. Le serie ricorrenti si modificano dall'app (le modifiche fatte in Google vengono sovrascritte).
+- **Agenda**: gli eventi dei calendari scelti nel Profilo compaiono nella home (finestra da 7 giorni fa a 60 giorni avanti).
+- Online Google avvisa l'app a ogni modifica (webhook `/api/google/webhook`, canali rinnovati dal cron); il cron ogni 15 minuti è la rete di sicurezza. In locale non ci sono notifiche di Google (serve un indirizzo https): usa "Sincronizza ora".
+
 ## Database
 
 - `pnpm db:generate` — nuova migrazione da `src/lib/server/db/schema.ts`.
@@ -61,7 +80,7 @@ Il cron prende i promemoria arrivati all'ora e li invia a tutti i dispositivi de
 - [x] Fase 3 — lista del giorno e todo: aggiunta rapida con riconoscimento di giorno, ora e ripetizione, modifica nella riga, scorrimento (Domani/Elimina), annulla, riordino, tastiera, ricorrenti.
 - [x] Fase 4 — home "Oggi": checklist dentro le note, card delle note del giorno, note raggruppate per periodo, todo in sospeso, segni sui giorni, calendario mensile.
 - [x] Fase 5 — notifiche: push sui dispositivi (Profilo), promemoria di todo e note, invio dal cron ogni minuto.
-- [ ] Fase 6 — Google Calendar (e accesso con Google).
+- [x] Fase 6 — Google: accesso con Google, Google Calendar nei due sensi (calendario dell'app, modifiche da Google, agenda nella home).
 - [ ] Fase 7 — AI con Gemini.
-- [ ] Fase 8 — PWA offline e pieghevoli.
+- [ ] Fase 8 — PWA offline e pieghevoli. Fatto: uso offline (service worker con pagine e dati in cache) e modifiche offline in coda (IndexedDB, `lib/outbox.svelte.ts`) inviate al ritorno della rete; restano i pieghevoli.
 - [ ] Fase 9 — deploy.
