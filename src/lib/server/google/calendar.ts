@@ -1,19 +1,17 @@
 // Google Calendar nei due sensi: todo e note nel calendario dell'app (coda google_outbox), modifiche
-// fatte in Google riportate nell'app, eventi dei calendari scelti per l'agenda della home.
-import { randomUUID } from 'node:crypto';
+// fatte in Google riportate nell'app, eventi dei calendari scelti trasformati in todo.
+import { createHash, randomUUID } from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
 import {
 	and,
 	asc,
 	desc,
 	eq,
-	gt,
 	gte,
 	inArray,
 	isNotNull,
 	isNull,
 	lt,
-	lte,
 	notInArray,
 	or,
 	sql
@@ -23,7 +21,14 @@ import { db, schema as s } from '../db/index.ts';
 import { getUser, toUser, type User } from '../auth.ts';
 import { updateNote } from '../notes.ts';
 import { setNoteReminder } from '../reminders.ts';
-import { moveTodo, setTodoTime, toggleTodo, updateTodoText, MAX_TODO_LENGTH } from '../todos.ts';
+import {
+	createTodos,
+	moveTodo,
+	setTodoTime,
+	toggleTodo,
+	updateTodoText,
+	MAX_TODO_LENGTH
+} from '../todos.ts';
 import { addDays, timeIn, todayIn, zonedDateTime } from '#lib/format.ts';
 import {
 	eventIdFor,
@@ -49,9 +54,10 @@ type Account = typeof s.googleAccount.$inferSelect;
 type Ref = [GoogleKind, string];
 
 export const APP_CALENDAR_NAME = 'NEURAL//NOTES';
-/** Finestra dell'agenda: eventi letti dai calendari scelti. */
-const AGENDA_PAST_DAYS = 7;
-const AGENDA_FUTURE_DAYS = 60;
+/** Todo dei giorni passati ancora inviati a Google (al collegamento e quando cambiano le scelte). */
+const PUSH_PAST_DAYS = 7;
+/** Eventi dei calendari scelti trasformati in todo: da oggi a tanti giorni avanti. */
+const IMPORT_DAYS = 60;
 const MAX_ATTEMPTS = 8;
 const CHANNEL_TTL_S = 7 * 24 * 60 * 60;
 
@@ -126,6 +132,12 @@ async function desiredEvent(acct: Account, user: User, kind: GoogleKind, id: str
 			.where(and(eq(s.todo.id, id), eq(s.checklist.userId, user.id)));
 		// le occorrenze dei ricorrenti stanno nell'evento della regola
 		if (!row || row.todo.deletedAt || row.todo.ruleId || row.checklist.kind !== 'day') return null;
+		// i todo nati da un evento di Google non tornano in Google come doppioni
+		const [imported] = await db
+			.select({ id: s.googleImport.todoId })
+			.from(s.googleImport)
+			.where(eq(s.googleImport.todoId, id));
+		if (imported) return null;
 		const [reminder] = await db
 			.select({ fireAt: s.reminder.fireAt })
 			.from(s.reminder)
@@ -325,7 +337,7 @@ async function queueEverything(user: User) {
 			and(
 				eq(s.checklist.userId, user.id),
 				eq(s.checklist.kind, 'day'),
-				gte(s.checklist.day, addDays(today, -AGENDA_PAST_DAYS)),
+				gte(s.checklist.day, addDays(today, -PUSH_PAST_DAYS)),
 				isNull(s.todo.deletedAt),
 				isNull(s.todo.ruleId)
 			)
@@ -496,9 +508,64 @@ async function pullAppCalendar(acct: Account, user: User, token: string) {
 	acct.pulledAt = started;
 }
 
-/** Rilegge gli eventi di un calendario scelto per l'agenda (finestra di qualche settimana). */
-async function refreshAgendaCalendar(user: User, token: string, calendarId: string) {
+/** Id del todo nato da un evento: sempre lo stesso, due letture insieme non creano doppioni. */
+function importedTodoId(userId: string, calendarId: string, eventId: string) {
+	const h = createHash('sha1').update(`gcal:${userId}:${calendarId}:${eventId}`).digest('hex');
+	return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
+type Imported = typeof s.googleImport.$inferSelect;
+
+/**
+ * Toglie i collegamenti con gli eventi; i todo di oggi in poi non ancora fatti se ne vanno con
+ * l'evento (quelli passati o fatti restano).
+ */
+async function dropImports(user: User, links: Imported[]) {
+	if (!links.length) return;
 	const today = todayIn(user.timezone);
+	const future = links.filter((l) => l.day >= today).map((l) => l.todoId);
+	if (future.length)
+		await db
+			.update(s.todo)
+			.set({ deletedAt: new Date() })
+			.where(and(inArray(s.todo.id, future), isNull(s.todo.doneAt), isNull(s.todo.deletedAt)));
+	await db.delete(s.googleImport).where(
+		and(
+			eq(s.googleImport.userId, user.id),
+			inArray(
+				s.googleImport.todoId,
+				links.map((l) => l.todoId)
+			)
+		)
+	);
+}
+
+/** Riporta nel todo solo quello che è cambiato in Google dall'ultima lettura. */
+async function updateImported(
+	user: User,
+	link: Imported,
+	remote: { title: string; day: string; time: string | null },
+	today: string
+) {
+	const [todo] = await db
+		.select({ deletedAt: s.todo.deletedAt })
+		.from(s.todo)
+		.where(eq(s.todo.id, link.todoId));
+	if (!todo || todo.deletedAt) return;
+	if (remote.title !== link.title) await updateTodoText(user, link.todoId, remote.title);
+	if (remote.day !== link.day) await moveTodo(user, link.todoId, remote.day);
+	if (remote.time !== link.time || remote.day !== link.day)
+		await setTodoTime(user, link.todoId, remote.time, today);
+}
+
+/**
+ * Trasforma in todo gli eventi di un calendario scelto, da oggi a IMPORT_DAYS giorni: un todo nel
+ * giorno dell'evento, all'ora dell'inizio (con il promemoria) o senza ora se è di tutto il giorno.
+ * Gli eventi spariti dal calendario tolgono i loro todo. False se il calendario non esiste più.
+ */
+async function importCalendar(user: User, token: string, calendarId: string) {
+	const today = todayIn(user.timezone);
+	const until = addDays(today, IMPORT_DAYS);
 	const items: GoogleEventRes[] = [];
 	let pageToken: string | undefined;
 	do {
@@ -510,16 +577,8 @@ async function refreshAgendaCalendar(user: User, token: string, calendarId: stri
 				query: {
 					singleEvents: 'true',
 					orderBy: 'startTime',
-					timeMin: zonedDateTime(
-						addDays(today, -AGENDA_PAST_DAYS),
-						'00:00',
-						user.timezone
-					).toISOString(),
-					timeMax: zonedDateTime(
-						addDays(today, AGENDA_FUTURE_DAYS),
-						'00:00',
-						user.timezone
-					).toISOString(),
+					timeMin: zonedDateTime(today, '00:00', user.timezone).toISOString(),
+					timeMax: zonedDateTime(until, '00:00', user.timezone).toISOString(),
 					maxResults: '2500',
 					pageToken
 				}
@@ -530,28 +589,68 @@ async function refreshAgendaCalendar(user: User, token: string, calendarId: stri
 		pageToken = page.nextPageToken;
 	} while (pageToken && items.length < 5000);
 
-	const rows = items
-		.filter((e) => e.status !== 'cancelled' && (e.start?.date || e.start?.dateTime))
-		.map((e) => ({
-			userId: user.id,
-			calendarId,
-			eventId: e.id,
-			title: (e.summary ?? '(senza titolo)').slice(0, 300),
-			location: e.location?.slice(0, 300) ?? null,
-			htmlLink: e.htmlLink ?? null,
-			start: e.start?.dateTime ? new Date(e.start.dateTime) : null,
-			end: e.end?.dateTime ? new Date(e.end.dateTime) : null,
-			startDay: e.start?.date ?? null,
-			endDay: e.end?.date ?? null
-		}));
-	await db
-		.delete(s.googleEvent)
-		.where(and(eq(s.googleEvent.userId, user.id), eq(s.googleEvent.calendarId, calendarId)));
-	for (let i = 0; i < rows.length; i += 500)
+	const links = await db
+		.select()
+		.from(s.googleImport)
+		.where(and(eq(s.googleImport.userId, user.id), eq(s.googleImport.calendarId, calendarId)));
+	const byEvent = new Map(links.map((l) => [l.eventId, l]));
+	const seen = new Set<string>();
+	for (const event of items) {
+		if (event.status === 'cancelled') continue;
+		const start = eventStart(event.start, user.timezone);
+		if (!start) continue;
+		seen.add(event.id);
+		const remote = {
+			title:
+				(event.summary ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_TODO_LENGTH) ||
+				'(senza titolo)',
+			day: start.day,
+			time: start.time
+		};
+		const link = byEvent.get(event.id);
+		if (link) {
+			if (link.title === remote.title && link.day === remote.day && link.time === remote.time)
+				continue;
+			await updateImported(user, link, remote, today);
+			await db
+				.update(s.googleImport)
+				.set(remote)
+				.where(
+					and(
+						eq(s.googleImport.userId, user.id),
+						eq(s.googleImport.calendarId, calendarId),
+						eq(s.googleImport.eventId, event.id)
+					)
+				);
+			continue;
+		}
+		// eventi iniziati prima di oggi (es. di più giorni): non diventano todo
+		if (remote.day < today) continue;
+		const todoId = importedTodoId(user.id, calendarId, event.id);
+		// todo rimasto da un collegamento tolto (calendario non più scelto e poi ripreso): si ricrea
+		await db.delete(s.todo).where(and(eq(s.todo.id, todoId), isNotNull(s.todo.deletedAt)));
+		try {
+			await createTodos(
+				user,
+				{ day: remote.day, texts: [remote.title], ids: [todoId], time: remote.time },
+				today
+			);
+		} catch (e) {
+			// creato nello stesso momento da un'altra lettura (webhook e cron insieme)
+			const [exists] = await db.select({ id: s.todo.id }).from(s.todo).where(eq(s.todo.id, todoId));
+			if (!exists) throw e;
+		}
 		await db
-			.insert(s.googleEvent)
-			.values(rows.slice(i, i + 500))
+			.insert(s.googleImport)
+			.values({ userId: user.id, calendarId, eventId: event.id, todoId, ...remote })
 			.onConflictDoNothing();
+	}
+	// eventi eliminati in Google o spostati fuori dalla finestra (solo con la lettura completa)
+	if (!pageToken)
+		await dropImports(
+			user,
+			links.filter((l) => !seen.has(l.eventId) && l.day >= today && l.day < until)
+		);
 	return true;
 }
 
@@ -650,7 +749,7 @@ async function syncChannels(acct: Account, token: string, renew: boolean) {
 // --- Giri di sincronizzazione ---
 
 /**
- * Sincronizzazione completa di un utente: coda, modifiche fatte in Google, agenda e (con
+ * Sincronizzazione completa di un utente: coda, modifiche fatte in Google, eventi in todo e (con
  * `channels`) rinnovo dei canali. Con `calendarId` solo quel calendario (dal webhook).
  */
 export async function syncGoogle(
@@ -668,24 +767,27 @@ export async function syncGoogle(
 			await flushOutbox(userId);
 			await pullAppCalendar(acct, user, token);
 		}
-		const agenda = acct.readCalendarIds.filter(
+		const imported = acct.readCalendarIds.filter(
 			(id) => id !== acct.targetCalendarId && (!only || id === only)
 		);
 		const gone: string[] = [];
-		for (const calendarId of agenda)
-			if (!(await refreshAgendaCalendar(user, token, calendarId))) gone.push(calendarId);
+		for (const calendarId of imported)
+			if (!(await importCalendar(user, token, calendarId))) gone.push(calendarId);
 		if (!only) {
-			// eventi di calendari non più scelti
-			await db
-				.delete(s.googleEvent)
-				.where(
-					and(
-						eq(s.googleEvent.userId, userId),
-						acct.readCalendarIds.length
-							? notInArray(s.googleEvent.calendarId, acct.readCalendarIds)
-							: undefined
+			// todo di calendari non più scelti (o spariti)
+			const kept = acct.readCalendarIds.filter((id) => !gone.includes(id));
+			await dropImports(
+				user,
+				await db
+					.select()
+					.from(s.googleImport)
+					.where(
+						and(
+							eq(s.googleImport.userId, userId),
+							kept.length ? notInArray(s.googleImport.calendarId, kept) : undefined
+						)
 					)
-				);
+			);
 		}
 		if (gone.length) {
 			acct.readCalendarIds = acct.readCalendarIds.filter((id) => !gone.includes(id));
@@ -768,7 +870,7 @@ export async function listCalendars(userId: string): Promise<GoogleCalendarInfo[
 
 /**
  * Dopo il consenso: salva i token, crea il calendario dell'app, sceglie il calendario principale
- * per l'agenda e mette in coda tutto quello che va inviato.
+ * (i suoi eventi diventano todo) e mette in coda tutto quello che va inviato.
  */
 export async function connectCalendar(
 	user: User,
@@ -840,7 +942,7 @@ export async function updateGoogleSettings(user: User, settings: GoogleSettings)
 		.update(s.googleAccount)
 		.set({ ...settings, readCalendarIds: settings.readCalendarIds.slice(0, 20) })
 		.where(eq(s.googleAccount.userId, user.id));
-	// nomi e colori dei calendari scelti, per l'agenda
+	// nomi e colori dei calendari scelti
 	const calendars = await listCalendars(user.id).catch(() => []);
 	for (const c of calendars.filter((c) => settings.readCalendarIds.includes(c.id)))
 		await db
@@ -874,62 +976,14 @@ export async function disconnectCalendar(userId: string, deleteCalendar: boolean
 		console.error('[google] scollega', e);
 	}
 	await revokeToken(decrypt(acct.refreshToken));
-	for (const table of [s.googleOutbox, s.googleEventLink, s.googleEvent, s.googleCalendar])
+	// i todo nati dagli eventi: restano quelli passati o fatti
+	const userRow = await getUser(userId);
+	if (userRow)
+		await dropImports(
+			toUser(userRow),
+			await db.select().from(s.googleImport).where(eq(s.googleImport.userId, userId))
+		);
+	for (const table of [s.googleOutbox, s.googleEventLink, s.googleImport, s.googleCalendar])
 		await db.delete(table).where(eq(table.userId, userId));
 	await db.delete(s.googleAccount).where(eq(s.googleAccount.userId, userId));
-}
-
-// --- Agenda della home ---
-
-export type AgendaEvent = {
-	key: string;
-	title: string;
-	time: string | null;
-	location: string | null;
-	color: string | null;
-	calendar: string;
-	href: string | null;
-};
-
-/** Eventi dei calendari scelti in un giorno: prima quelli di tutto il giorno, poi per orario. */
-export async function agendaFor(user: User, day: string): Promise<AgendaEvent[]> {
-	const from = zonedDateTime(day, '00:00', user.timezone);
-	const to = zonedDateTime(addDays(day, 1), '00:00', user.timezone);
-	const rows = await db
-		.select({ event: s.googleEvent, name: s.googleCalendar.name, color: s.googleCalendar.color })
-		.from(s.googleEvent)
-		.leftJoin(
-			s.googleCalendar,
-			and(
-				eq(s.googleCalendar.userId, s.googleEvent.userId),
-				eq(s.googleCalendar.calendarId, s.googleEvent.calendarId)
-			)
-		)
-		.where(
-			and(
-				eq(s.googleEvent.userId, user.id),
-				or(
-					and(lte(s.googleEvent.startDay, day), gt(s.googleEvent.endDay, day)),
-					and(lt(s.googleEvent.start, to), gt(s.googleEvent.end, from))
-				)
-			)
-		)
-		.orderBy(asc(s.googleEvent.startDay), asc(s.googleEvent.start));
-	return rows.map(({ event, name, color }) => {
-		let time: string | null = null;
-		if (event.start && event.end) {
-			const start = event.start < from ? '…' : timeIn(event.start, user.timezone);
-			const end = event.end > to ? '…' : timeIn(event.end, user.timezone);
-			time = `${start}–${end}`;
-		}
-		return {
-			key: `${event.calendarId}/${event.eventId}`,
-			title: event.title,
-			time,
-			location: event.location,
-			color,
-			calendar: name ?? '',
-			href: event.htmlLink
-		};
-	});
 }

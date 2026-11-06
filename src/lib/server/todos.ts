@@ -413,7 +413,10 @@ export async function createNoteChecklist(user: User, noteId: string, wantedId?:
 	return wantedId && !(await ownChecklist(user.id, id)) ? null : id;
 }
 
-/** Todo non fatti dei giorni passati (ultimi 30 giorni), dal più vecchio. */
+/**
+ * Todo non fatti dei giorni passati (ultimi 30 giorni), dal più vecchio. Senza quelli nati dagli
+ * eventi di Google Calendar: un evento passato non resta da fare.
+ */
 export async function overdueTodos(user: User, today: string, since: string) {
 	const rows = await db
 		.select({ id: s.todo.id, text: s.todo.text, ruleId: s.todo.ruleId, day: s.checklist.day })
@@ -426,7 +429,8 @@ export async function overdueTodos(user: User, today: string, since: string) {
 				sql`${s.checklist.day} < ${today}`,
 				gte(s.checklist.day, since),
 				isNull(s.todo.doneAt),
-				isNull(s.todo.deletedAt)
+				isNull(s.todo.deletedAt),
+				sql`not exists (select 1 from ${s.googleImport} where ${s.googleImport.todoId} = ${s.todo.id})`
 			)
 		)
 		.orderBy(asc(s.checklist.day), asc(s.todo.position));

@@ -147,49 +147,6 @@
 			{/each}
 		</section>
 
-		{#if data.agenda}
-			<section aria-labelledby="agenda-title" class="flex flex-col gap-3">
-				<div class="flex items-center gap-2.5">
-					<span aria-hidden="true" class="h-0.5 w-3 bg-neon"></span>
-					<h2 id="agenda-title" class="flex-1 lbl text-[13px] font-bold text-neon">Agenda</h2>
-					<a href="/profilo#gc-title" class="btn-link lbl text-[11px]">Calendari ›</a>
-				</div>
-				{#if data.agenda.length}
-					<ul class="flex flex-col border border-line">
-						{#each data.agenda as event (event.key)}
-							<li class="border-b border-line last:border-0">
-								<a
-									href={event.href ?? undefined}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="flex min-h-12 items-center gap-3 px-3.5 py-2 hover:bg-line/40"
-								>
-									<span
-										class="w-1 self-stretch"
-										style:background={event.color ?? 'var(--color-soft)'}
-										aria-hidden="true"
-									></span>
-									<span class="w-24 shrink-0 text-[13px] font-semibold text-soft tabular-nums">
-										{event.time ?? 'Tutto il giorno'}
-									</span>
-									<span class="flex min-w-0 flex-1 flex-col">
-										<span class="truncate font-semibold">{event.title}</span>
-										{#if event.location}
-											<span class="truncate text-[13px] text-dim">{event.location}</span>
-										{/if}
-									</span>
-								</a>
-							</li>
-						{/each}
-					</ul>
-				{:else}
-					<p class="border border-line px-3.5 py-3 text-sm text-dim">
-						Nessun evento in calendario.
-					</p>
-				{/if}
-			</section>
-		{/if}
-
 		<section aria-labelledby="notes-title" class="flex flex-col gap-3">
 			<div class="flex items-baseline justify-between">
 				<h2 id="notes-title" class="text-[34px] leading-none font-bold text-volt uppercase">

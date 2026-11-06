@@ -341,25 +341,24 @@ export const googleOutbox = pgTable(
 	]
 );
 
-/** Eventi dei calendari letti, per l'agenda della home: orari (start/end) o di tutto il giorno. */
-export const googleEvent = pgTable(
-	'google_event',
+/**
+ * Evento di un calendario scelto diventato todo, con titolo, giorno e ora com'erano in Google
+ * all'ultima lettura: nel todo si riporta solo quello che cambia in Google, le modifiche fatte
+ * nell'app restano.
+ */
+export const googleImport = pgTable(
+	'google_import',
 	{
 		userId: userId(),
 		calendarId: text('calendar_id').notNull(),
 		eventId: text('event_id').notNull(),
-		title: text('title').notNull().default(''),
-		location: text('location'),
-		htmlLink: text('html_link'),
-		start: timestamp('start', { withTimezone: true }),
-		end: timestamp('end', { withTimezone: true }),
-		// tutto il giorno: dal primo giorno compreso all'ultimo escluso
-		startDay: date('start_day', { mode: 'string' }),
-		endDay: date('end_day', { mode: 'string' })
+		todoId: text('todo_id').notNull(),
+		title: text('title').notNull(),
+		day: date('day', { mode: 'string' }).notNull(),
+		time: text('time')
 	},
 	(t) => [
 		primaryKey({ columns: [t.userId, t.calendarId, t.eventId] }),
-		index('google_event_start_idx').on(t.userId, t.start),
-		index('google_event_day_idx').on(t.userId, t.startDay)
+		uniqueIndex('google_import_todo_idx').on(t.todoId)
 	]
 );

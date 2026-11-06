@@ -20,7 +20,7 @@
 			<li>crea un calendario “NEURAL//NOTES” e vi scrive gli eventi di todo e note;</li>
 			<li>legge le modifiche fatte a quel calendario per riportarle nell’app;</li>
 			<li>
-				legge l’elenco dei calendari e gli eventi di quelli che scegli, per mostrarli nell’agenda.
+				legge l’elenco dei calendari e gli eventi di quelli che scegli, per trasformarli in todo.
 			</li>
 		</ul>
 		<p>

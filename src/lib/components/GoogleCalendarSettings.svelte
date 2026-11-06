@@ -2,7 +2,7 @@
 	import { CalendarSync, RefreshCw, Unlink } from '@lucide/svelte';
 	import { dateTime } from '#lib/format.ts';
 
-	// Profilo → Google Calendar: collegamento, cosa inviare, calendari dell'agenda, scollega.
+	// Profilo → Google Calendar: collegamento, cosa inviare, calendari i cui eventi diventano todo, scollega.
 	type Props = {
 		google: {
 			calendarEnabled: boolean;
@@ -65,8 +65,8 @@
 			{/if}
 			<p class="text-[15px] leading-relaxed text-soft">
 				I todo con orario e le note con un giorno finiscono in un calendario "NEURAL//NOTES" creato
-				dall'app; gli eventi dei tuoi calendari compaiono nella home. Le modifiche fatte in Google
-				tornano nell'app.
+				dall'app; gli eventi dei tuoi calendari diventano todo con orario. Le modifiche fatte in
+				Google tornano nell'app.
 			</p>
 			<a href="/api/google/connect" class="btn-primary" data-sveltekit-reload>
 				<CalendarSync size={18} aria-hidden="true" /> Collega Google Calendar
@@ -111,7 +111,7 @@
 				</fieldset>
 
 				<fieldset class="flex flex-col gap-1">
-					<legend class="mb-1 lbl text-soft">Eventi nella home</legend>
+					<legend class="mb-1 lbl text-soft">Eventi che diventano todo</legend>
 					{#if google.calendars === null}
 						<p class="text-sm text-alert">
 							Elenco dei calendari non disponibile: riprova più tardi.

@@ -57,7 +57,7 @@ Con solo client ID e segreto c'è "Continua con Google" su accesso e registrazio
 - **Accesso con Google**: nuovo account senza password (si può impostare dal Profilo); un account esistente con la stessa email viene collegato solo se l'email è confermata. Con `SIGNUP_CODE` i nuovi account passano solo dalla registrazione con il codice.
 - **Calendario**: al collegamento l'app crea il calendario "NEURAL//NOTES" e ci mette i todo con orario (30 minuti; fatti con "✓"), i ricorrenti come serie (`RRULE`, le occorrenze eliminate o spostate come eccezioni) e le note con un giorno o un promemoria. I todo senza orario sono facoltativi. Gli eventi non hanno promemoria di Google: gli avvisi restano le notifiche dell'app.
 - **Da Google all'app**: spostare o rinominare l'evento di un todo o di una nota (o aggiungere/togliere "✓") cambia l'elemento; un evento eliminato in Google non viene ricreato finché l'elemento non cambia. Le serie ricorrenti si modificano dall'app (le modifiche fatte in Google vengono sovrascritte).
-- **Agenda**: gli eventi dei calendari scelti nel Profilo compaiono nella home (finestra da 7 giorni fa a 60 giorni avanti).
+- **Eventi in todo**: gli eventi dei calendari scelti nel Profilo, da oggi a 60 giorni, diventano todo nel loro giorno, all'ora d'inizio con il promemoria (quelli di tutto il giorno senza ora). Si spuntano, modificano ed eliminano come gli altri; dalle modifiche fatte in Google si riporta solo quello che cambia (titolo, giorno, ora) e un evento eliminato toglie il suo todo, se non è già fatto. Non finiscono nel calendario NEURAL//NOTES e, passati, non restano "in sospeso". Togliendo un calendario dalla scelta (o scollegando) se ne vanno i suoi todo futuri non fatti.
 - Online Google avvisa l'app a ogni modifica (webhook `/api/google/webhook`, canali rinnovati dal cron); il cron ogni 15 minuti è la rete di sicurezza. In locale non ci sono notifiche di Google (serve un indirizzo https): usa "Sincronizza ora".
 
 ## Database
@@ -80,7 +80,7 @@ Con solo client ID e segreto c'è "Continua con Google" su accesso e registrazio
 - [x] Fase 3 — lista del giorno e todo: aggiunta rapida con riconoscimento di giorno, ora e ripetizione, modifica nella riga, scorrimento (Domani/Elimina), annulla, riordino, tastiera, ricorrenti.
 - [x] Fase 4 — home "Oggi": checklist dentro le note, card delle note del giorno, note raggruppate per periodo, todo in sospeso, segni sui giorni, calendario mensile.
 - [x] Fase 5 — notifiche: push sui dispositivi (Profilo), promemoria di todo e note, invio dal cron ogni minuto.
-- [x] Fase 6 — Google: accesso con Google, Google Calendar nei due sensi (calendario dell'app, modifiche da Google, agenda nella home).
+- [x] Fase 6 — Google: accesso con Google, Google Calendar nei due sensi (calendario dell'app, modifiche da Google, eventi dei calendari in todo).
 - [ ] Fase 7 — AI con Gemini.
 - [ ] Fase 8 — PWA offline e pieghevoli. Fatto: uso offline (service worker con pagine e dati in cache) e modifiche offline in coda (IndexedDB, `lib/outbox.svelte.ts`) inviate al ritorno della rete; restano i pieghevoli.
 - [ ] Fase 9 — deploy.

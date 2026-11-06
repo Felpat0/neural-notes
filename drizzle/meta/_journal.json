@@ -22,6 +22,20 @@
       "when": 1793644877758,
       "tag": "0002_google",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793973742315,
+      "tag": "0003_google_import",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793973753616,
+      "tag": "0004_drop_google_event",
+      "breakpoints": true
     }
   ]
 }
