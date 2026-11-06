@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
 	'/password-dimenticata',
 	'/reimposta/',
 	'/verifica/',
+	'/privacy',
 	'/manifest.webmanifest'
 ];
 
