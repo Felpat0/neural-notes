@@ -1,20 +1,69 @@
 // Chiamate a Gemini: REST diretto (niente SDK), con i modelli di riserva quando uno ha la quota
-// esaurita o non risponde. I modelli si scelgono con GEMINI_MODELS (in seguito dalla pagina dei
-// modelli, in app_setting).
+// esaurita o non risponde. I modelli si possono fissare con GEMINI_MODELS (in seguito dalla pagina
+// dei modelli, in app_setting); altrimenti si scelgono da soli tra quelli che l'API offre, così
+// un modello ritirato da Google non blocca l'app.
 import { GEMINI_API_BASE, GEMINI_API_KEY, GEMINI_MODELS } from '$app/env/private';
 
 const BASE = GEMINI_API_BASE || 'https://generativelanguage.googleapis.com/v1beta';
-const DEFAULT_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+/** Alias di Google che seguono sempre l'ultima versione: se l'elenco dei modelli non risponde. */
+const FALLBACK_MODELS = ['gemini-flash-latest', 'gemini-flash-lite-latest'];
 const TIMEOUT = 45_000;
+const LIST_TTL = 6 * 60 * 60 * 1000;
 
 export const geminiEnabled = () => !!GEMINI_API_KEY;
 
-const models = () =>
-	GEMINI_MODELS
-		? GEMINI_MODELS.split(',')
-				.map((m) => m.trim())
-				.filter(Boolean)
-		: DEFAULT_MODELS;
+/** Versione nel nome ("gemini-3.1-flash" → [3, 1]), per mettere prima i più recenti. */
+const version = (name: string) =>
+	(name.match(/^gemini-(\d+)(?:\.(\d+))?/) ?? []).slice(1).map(Number);
+const newerFirst = (a: string, b: string) => {
+	const [va, vb] = [version(a), version(b)];
+	return (vb[0] || 0) - (va[0] || 0) || (vb[1] || 0) - (va[1] || 0);
+};
+
+let cached: { at: number; models: string[] } | null = null;
+
+/**
+ * Modelli scelti dall'elenco dell'API: il Flash stabile più recente, poi il Flash-Lite più
+ * recente, poi gli alias "-latest". Solo modelli stabili (senza preview/exp/date nel nome).
+ */
+async function autoModels(): Promise<string[]> {
+	if (cached && Date.now() - cached.at < LIST_TTL) return cached.models;
+	let names: string[] = [];
+	try {
+		const response = await fetch(`${BASE}/models?pageSize=1000`, {
+			headers: { 'x-goog-api-key': GEMINI_API_KEY! },
+			signal: AbortSignal.timeout(5000)
+		});
+		if (response.ok) {
+			const { models = [] } = (await response.json()) as {
+				models?: { name: string; supportedGenerationMethods?: string[] }[];
+			};
+			names = models
+				.filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+				.map((m) => m.name.replace(/^models\//, ''));
+		}
+	} catch {
+		// si usano gli alias
+	}
+	const pick = (re: RegExp) => names.filter((n) => re.test(n)).sort(newerFirst)[0];
+	const flash = pick(/^gemini-\d+(\.\d+)?-flash$/);
+	const lite = pick(/^gemini-\d+(\.\d+)?-flash-lite$/);
+	const list = [
+		...new Set([flash, lite, ...FALLBACK_MODELS].filter((m): m is string => !!m))
+	].filter((m) => !names.length || names.includes(m) || !m.startsWith('gemini-flash'));
+	const models = list.length ? list : FALLBACK_MODELS;
+	// un elenco vuoto (API non raggiungibile) non si tiene: si riprova alla prossima richiesta
+	if (names.length) cached = { at: Date.now(), models };
+	return models;
+}
+
+async function models() {
+	if (GEMINI_MODELS)
+		return GEMINI_MODELS.split(',')
+			.map((m) => m.trim())
+			.filter(Boolean);
+	return autoModels();
+}
 
 export type Part = { text: string } | { inline_data: { mime_type: string; data: string } };
 
@@ -48,7 +97,7 @@ export async function generateJson<T>(input: {
 }): Promise<{ data: T; model: string }> {
 	if (!GEMINI_API_KEY) throw new GeminiError('GEMINI_API_KEY non impostata', 503);
 	let last: GeminiError | null = null;
-	for (const model of models()) {
+	for (const model of await models()) {
 		let response: Response;
 		try {
 			response = await fetch(`${BASE}/models/${encodeURIComponent(model)}:generateContent`, {
@@ -73,7 +122,11 @@ export async function generateJson<T>(input: {
 			const body = (await response.json().catch(() => null)) as {
 				error?: { message?: string };
 			} | null;
-			last = new GeminiError(reason(response.status, body), response.status);
+			const message = reason(response.status, body);
+			last = new GeminiError(
+				response.status === 404 ? `${message} (${model})` : message,
+				response.status
+			);
 			if (response.status === 429 || response.status === 404 || response.status >= 500) continue;
 			throw last;
 		}
