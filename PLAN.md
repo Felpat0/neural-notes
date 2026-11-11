@@ -376,8 +376,14 @@ GOOGLE_CLIENT_ID      client OAuth "Web" (Google Cloud Console)
 GOOGLE_CLIENT_SECRET
 GOOGLE_TOKEN_KEY      32 byte casuali in base64, per cifrare i token Google
 GOOGLE_WEBHOOK_SECRET token dei canali events.watch
-GEMINI_API_KEY        aistudio.google.com (senza: funzioni AI nascoste)
+GEMINI_API_KEY        aistudio.google.com (senza: funzioni AI e note vocali nascoste)
+GEMINI_MODELS         facoltativo, modelli in ordine di riserva (default gemini-2.5-flash,gemini-2.5-flash-lite)
+BLOB_READ_WRITE_TOKEN store Vercel Blob per l'audio delle note vocali (in locale: cartella .attachments/)
 ```
+
+## Note vocali
+
+Pulsante flottante con il microfono nella home, sopra "Nuova nota": un tocco avvia e un secondo tocco ferma, oppure si tiene premuto per parlare. L'audio (`MediaRecorder`, opus/mp4 a 32 kbit/s, massimo 10 minuti) va nella coda offline come voce `voice` e da lì a `/api/voice`, che crea la nota del giorno, salva l'audio come allegato (`attachment`, Vercel Blob privato) e lo fa trascrivere a Gemini nella stessa richiesta: titolo, testo ripulito e una checklist con le cose da fare. Al primo uso si chiede il consenso (`user.voice_consent_at`), che si toglie dal Profilo. Se la trascrizione non riesce l'audio resta, e dalla nota si può fare "Trascrivi di nuovo". Codice: `server/voice.ts`, `server/gemini.ts`, `server/storage.ts`, `VoiceRecorder.svelte`, `NoteAttachments.svelte`.
 
 ## Limiti dei piani gratuiti
 

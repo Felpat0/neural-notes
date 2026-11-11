@@ -30,6 +30,13 @@
 				>norme sui dati utente dei servizi API di Google</a
 			>, compresi i requisiti di uso limitato.
 		</p>
+		<h2 class="lbl font-bold text-volt">Note vocali</h2>
+		<p>
+			Solo dopo il tuo consenso, l’audio delle note vocali viene inviato a Google Gemini per la
+			trascrizione. Nel piano gratuito dell’API Google può usare audio e testo per migliorare i
+			propri prodotti. L’audio resta salvato in privato come allegato della nota (Vercel Blob)
+			finché non lo elimini dalla nota o elimini l’account; il consenso si toglie dal Profilo.
+		</p>
 		<h2 class="lbl font-bold text-volt">Scollegamento ed eliminazione</h2>
 		<p>
 			Scollegando Google Calendar dal Profilo l’accesso viene revocato e gli eventi copiati vengono

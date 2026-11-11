@@ -46,6 +46,15 @@ export type Entry = Common &
 		  }
 		| { kind: 'reminder'; noteId: string; at: string | null }
 		| { kind: 'deleteNote'; noteId: string }
+		| {
+				/** nota vocale: crea la nota con l'audio in allegato e la trascrive */
+				kind: 'voice';
+				noteId: string;
+				attachmentId: string;
+				day: string | null;
+				audio: Blob;
+				durationMs: number;
+		  }
 	);
 type DistOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 type NewEntry = DistOmit<Entry, keyof Common>;
@@ -87,6 +96,8 @@ function openDb() {
 const RETRY_DELAYS = [2_000, 5_000, 15_000, 30_000, 60_000];
 const MAX_ATTEMPTS = 5;
 const TIMEOUT = 20_000;
+/** invio dell'audio e trascrizione nella stessa richiesta */
+const VOICE_TIMEOUT = 90_000;
 
 class Outbox {
 	/** modifiche dell'utente ancora da inviare, in ordine */
@@ -154,7 +165,9 @@ class Outbox {
 		);
 	}
 	isDraft(noteId: string) {
-		return this.entries.some((e) => e.kind === 'createNote' && e.noteId === noteId);
+		return this.entries.some(
+			(e) => (e.kind === 'createNote' || e.kind === 'voice') && e.noteId === noteId
+		);
 	}
 	isDeleted(noteId: string) {
 		return this.entries.some((e) => e.kind === 'deleteNote' && e.noteId === noteId);
@@ -162,8 +175,15 @@ class Outbox {
 	/** Note create sul dispositivo e non ancora sul server (con il titolo, se c'è già). */
 	get drafts() {
 		return this.entries.flatMap((e) =>
-			e.kind === 'createNote' && !this.isDeleted(e.noteId)
-				? [{ id: e.noteId, day: e.day, title: this.note(e.noteId)?.patch.title ?? '' }]
+			(e.kind === 'createNote' || e.kind === 'voice') && !this.isDeleted(e.noteId)
+				? [
+						{
+							id: e.noteId,
+							day: e.day,
+							title: this.note(e.noteId)?.patch.title ?? '',
+							voice: e.kind === 'voice'
+						}
+					]
 				: []
 		);
 	}
@@ -176,6 +196,16 @@ class Outbox {
 	}
 	createNote(noteId: string, day: string | null) {
 		return this.#add({ kind: 'createNote', noteId, day }, `c:${noteId}`);
+	}
+	/** Nota vocale registrata sul dispositivo: l'audio resta in coda finché non arriva al server. */
+	voiceNote(input: {
+		noteId: string;
+		attachmentId: string;
+		day: string | null;
+		audio: Blob;
+		durationMs: number;
+	}) {
+		return this.#add({ kind: 'voice', ...input }, `v:${input.attachmentId}`);
 	}
 	deleteNote(noteId: string) {
 		return this.#add({ kind: 'deleteNote', noteId }, `d:${noteId}`);
@@ -356,6 +386,19 @@ class Outbox {
 				return call(`/api/notes/${entry.noteId}/reminder`, 'PUT', { at: entry.at });
 			case 'deleteNote':
 				return call(`/api/notes/${entry.noteId}`, 'DELETE');
+			case 'voice': {
+				const form = new FormData();
+				form.set('noteId', entry.noteId);
+				form.set('attachmentId', entry.attachmentId);
+				if (entry.day) form.set('day', entry.day);
+				form.set('durationMs', String(entry.durationMs));
+				form.set('audio', entry.audio, 'audio');
+				const abort = new AbortController();
+				const timer = setTimeout(() => abort.abort(), VOICE_TIMEOUT);
+				return fetch('/api/voice', { method: 'POST', body: form, signal: abort.signal }).finally(
+					() => clearTimeout(timer)
+				);
+			}
 		}
 	}
 
@@ -432,6 +475,12 @@ class Outbox {
 		// promemoria cambiato di nuovo nel frattempo: resta da inviare il valore nuovo
 		if (entry.kind === 'reminder' && now.kind === 'reminder' && now.at !== entry.at) return;
 		this.#delete(entry.key);
+		// nota vocale arrivata (e trascritta): la nota compare negli elenchi
+		if (entry.kind === 'voice') {
+			if (data?.transcribed === false)
+				this.notify(`Audio salvato, trascrizione non riuscita: ${data.message ?? 'errore'}`);
+			void invalidateAll();
+		}
 		// nota eliminata: quello che restava da inviare per lei non serve più
 		if (entry.kind === 'deleteNote')
 			for (const e of this.entries)

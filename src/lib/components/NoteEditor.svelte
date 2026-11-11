@@ -7,6 +7,7 @@
 	import Highlight from '@tiptap/extension-highlight';
 	import { Placeholder } from '@tiptap/extensions';
 	import { ChecklistEmbed } from '#lib/editor/checklist-embed.ts';
+	import NoteAttachments, { type Attachment } from '#lib/components/NoteAttachments.svelte';
 	import { isCached } from '#lib/offline-pages.ts';
 	import { newId, outbox, type NoteVersion } from '#lib/outbox.svelte.ts';
 	import {
@@ -53,12 +54,15 @@
 	let {
 		note,
 		today,
-		reminder: initialReminder
+		reminder: initialReminder,
+		attachments = []
 	}: {
 		note: Note;
 		today: string;
 		/** prossimo promemoria, "AAAA-MM-GGTHH:MM" nel fuso dell'utente */
 		reminder: string | null;
+		/** audio delle note vocali */
+		attachments?: Attachment[];
 	} = $props();
 	// l'editor parte dalla versione caricata, con sopra le modifiche ancora in coda (fatte offline:
 	// la pagina può venire dalla cache); da lì in poi lo stato è locale
@@ -597,6 +601,8 @@
 				/>
 			</label>
 		</div>
+
+		<NoteAttachments {attachments} />
 
 		<div bind:this={element} class="flex-1"></div>
 	</div>

@@ -24,3 +24,4 @@ vite.config.ts.timestamp-*
 .pglite
 
 .vercel
+.attachments

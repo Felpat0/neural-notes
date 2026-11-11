@@ -51,6 +51,26 @@ export const variables = defineEnvVars({
 			'32 byte casuali in base64, per cifrare i token di Google Calendar nel DB (senza: niente Calendar).',
 		schema: optional
 	},
+	// AI: senza chiave le funzioni AI (e le note vocali) restano nascoste.
+	GEMINI_API_KEY: {
+		description: 'Chiave dell’API Gemini (aistudio.google.com).',
+		schema: optional
+	},
+	GEMINI_MODELS: {
+		description:
+			'Modelli per testo e trascrizioni, in ordine: si passa al successivo se uno è esaurito o non risponde (default gemini-2.5-flash,gemini-2.5-flash-lite).',
+		schema: optional
+	},
+	GEMINI_API_BASE: {
+		description: 'Solo per i test in locale: un finto server Gemini al posto di quello vero.',
+		schema: optional
+	},
+	// Allegati (audio delle note vocali): Vercel Blob con accesso privato. In locale, senza token,
+	// i file vanno nella cartella .attachments/.
+	BLOB_READ_WRITE_TOKEN: {
+		description: 'Token dello store Vercel Blob (creato collegando uno store Blob al progetto).',
+		schema: optional
+	},
 	GOOGLE_API_BASE: {
 		description: 'Solo per i test in locale: un finto server Google al posto di quelli veri.',
 		schema: optional

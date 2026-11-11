@@ -82,6 +82,35 @@
 
 	<NotificationSettings />
 
+	{#if data.voice?.enabled}
+		<form
+			method="POST"
+			action="?/voiceConsent"
+			class="frame flex flex-col gap-3.5 px-4 pt-5 pb-4.5"
+			aria-labelledby="pr-voice"
+		>
+			<h2 id="pr-voice" class="ml-3 text-xl font-bold text-volt uppercase">Note vocali</h2>
+			<p class="text-[14px] leading-relaxed text-soft">
+				Le note vocali vengono trascritte da Google Gemini: l'audio viene inviato a Google. Nel
+				piano gratuito dell'API Google può usare audio e testo per migliorare i propri prodotti.
+				L'audio resta allegato alla nota finché non lo elimini.
+			</p>
+			<label class="flex min-h-11 items-center gap-2.5 text-[15px]">
+				<input
+					type="checkbox"
+					name="allow"
+					checked={data.voice.consent}
+					class="size-5.5 shrink-0 rounded-none border-2 border-volt bg-void text-volt focus:ring-neon"
+				/>
+				Consenti la trascrizione con Gemini
+			</label>
+			{#if form?.voiceSaved}
+				<p class="text-sm font-semibold text-neon" role="status">Salvato.</p>
+			{/if}
+			<button class="btn-outline">Salva</button>
+		</form>
+	{/if}
+
 	<GoogleCalendarSettings
 		google={data.google}
 		{form}

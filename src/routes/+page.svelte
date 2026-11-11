@@ -5,6 +5,7 @@
 	import OverdueList from '#lib/components/OverdueList.svelte';
 	import TodoList from '#lib/components/TodoList.svelte';
 	import DraftNotes from '#lib/components/DraftNotes.svelte';
+	import VoiceRecorder from '#lib/components/VoiceRecorder.svelte';
 	import { addDays, dayNumber, monthShort, weekdayName, weekdayShort } from '#lib/format.ts';
 	import { onMount } from 'svelte';
 	import { newNote } from '#lib/new-note.ts';
@@ -179,3 +180,8 @@
 		<FilePlus size={26} strokeWidth={2.5} aria-hidden="true" />
 	</button>
 </form>
+
+<!-- nota vocale al volo, sopra "Nuova nota": finisce tra le note di oggi -->
+{#if data.voice?.enabled}
+	<VoiceRecorder consent={data.voice.consent} day={data.today} />
+{/if}

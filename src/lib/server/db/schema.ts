@@ -52,6 +52,8 @@ export const user = pgTable('user', {
 	aiEnabled: boolean('ai_enabled').notNull().default(true),
 	// "Consenti l'AI sulle nuove note": spento, le note sono escluse di default
 	aiDefaultAllowed: boolean('ai_default_allowed').notNull().default(false),
+	// consenso a mandare l'audio delle note vocali a Gemini per la trascrizione (null: da chiedere)
+	voiceConsentAt: timestamp('voice_consent_at', { withTimezone: true }),
 	createdAt: createdAt(),
 	updatedAt: updatedAt()
 });
@@ -184,6 +186,38 @@ export const checklist = pgTable(
 			.where(sql`${t.kind} = 'day'`),
 		index('checklist_note_idx').on(t.noteId)
 	]
+);
+
+export const ATTACHMENT_KINDS = ['audio'] as const;
+export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
+export const TRANSCRIPT_STATES = ['pending', 'done', 'error'] as const;
+export type TranscriptState = (typeof TRANSCRIPT_STATES)[number];
+
+/**
+ * File allegato a una nota (per ora l'audio delle note vocali), salvato fuori dal DB
+ * (server/storage.ts: Vercel Blob privato, o una cartella locale in sviluppo). L'id lo sceglie
+ * il dispositivo, così l'invio dalla coda offline si può ripetere senza doppioni.
+ */
+export const attachment = pgTable(
+	'attachment',
+	{
+		id: text('id').primaryKey(),
+		userId: userId(),
+		noteId: text('note_id')
+			.notNull()
+			.references(() => note.id, { onDelete: 'cascade' }),
+		kind: text('kind').$type<AttachmentKind>().notNull(),
+		// percorso nello storage
+		storageKey: text('storage_key').notNull(),
+		mime: text('mime').notNull(),
+		size: integer('size').notNull(),
+		durationMs: integer('duration_ms'),
+		// trascrizione dell'audio: in corso, fatta (testo aggiunto alla nota) o fallita
+		transcript: text('transcript').$type<TranscriptState>(),
+		transcriptError: text('transcript_error'),
+		createdAt: createdAt()
+	},
+	(t) => [index('attachment_note_idx').on(t.noteId), index('attachment_user_idx').on(t.userId)]
 );
 
 export const todoRule = pgTable('todo_rule', {

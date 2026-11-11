@@ -23,6 +23,7 @@ import {
 } from '#lib/server/google/calendar.ts';
 import { appUrl, sendMail, verifyEmail } from '#lib/server/mail.ts';
 import { passwordProblem, verifyPassword } from '#lib/server/password.ts';
+import { deleteUserFiles, setVoiceConsent } from '#lib/server/voice.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 async function googleState(userId: string) {
@@ -111,6 +112,12 @@ export const actions: Actions = {
 		return { verifySent: true };
 	},
 
+	voiceConsent: async ({ request, locals }) => {
+		const form = await request.formData();
+		await setVoiceConsent(locals.user!.id, form.get('allow') === 'on');
+		return { voiceSaved: true };
+	},
+
 	googleSettings: async ({ request, locals }) => {
 		const form = await request.formData();
 		const ok = await updateGoogleSettings(locals.user!, {
@@ -162,6 +169,8 @@ export const actions: Actions = {
 			return fail(400, { deleteError: 'Password non corretta.' });
 		// Google: chiude i canali e revoca l'accesso (il calendario dell'app resta in Google)
 		await disconnectCalendar(me.id, false);
+		// i file degli allegati stanno fuori dal DB
+		await deleteUserFiles(me.id);
 		// tutto il resto (note, todo, sessioni…) si elimina a cascata
 		await db.delete(s.user).where(eq(s.user.id, me.id));
 		await endSession(cookies);
