@@ -129,7 +129,11 @@
 							disabled={busy === a.id}
 							onclick={() => retry(a.id)}
 						>
-							<RotateCcw size={14} class={busy === a.id ? 'animate-spin' : ''} aria-hidden="true" />
+							<RotateCcw
+								size={14}
+								class={busy === a.id ? 'animate-spin [animation-direction:reverse]' : ''}
+								aria-hidden="true"
+							/>
 							Trascrivi di nuovo
 						</button>
 					</div>
